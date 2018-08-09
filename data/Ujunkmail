@@ -1,0 +1,189 @@
+Date: ${date}
+From: harry@explores.org.ln (Harry Flutesnorkler)
+To: ${player_email}
+Subject: Congratulations!
+
+Dear ${player},
+
+It is my pleasure to inform you that your valiant efforts in the Caves
+of Larn has earned you an honorary membership in the Explorers' Guild.
+
+In addition to the right to call yourself an Explorer and full access
+to the Guild Hall, membership also grants you an Official Certificate
+of Achievement (attached).
+
+Once again, congratulations and welcome aboard.
+
+Sincerely,
+
+Doctor Lord Haroldorf "Harry" Flutesnorkler III,
+President,
+Explorers' Guild of Larn
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
+
+                       This is to certify that
+
+                    [${player}]
+
+    Has successfully performed a Great Feat of Exploration, namely
+
+              [reaching the end of the Caves of Larn and Larn Volcano]
+              
+                      [retrieving ${wealth_gp}]
+
+                    [slaying the God of Hellfire]
+
+  on this date, [${date}], and has so earned membership in the
+        Explorers' Guild of Larn with [${score}] Club Points.
+
+  Signed,                          
+  Doctor Lord Haroldorf "Harry" Flutesnorkler III,          Signed
+  President                   Professor Count Headhelm "Speckie" Flortwaggler
+                                                            Vice President
+
+ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Date: ${date}
+From: lrs@larn.com.ln (Larn Revenue Service)
+To: ${player_email}
+Subject: undeclared income
+
+We heard you survived the caverns of Larn.  Let me be the first to
+congratulate you on your success.  It is quite a feat.  It must also
+have been very profitable for you.
+
+The Explorer's Guild has informed us that you brought ${wealth_gp}
+back with you from your journey.  As the Land of Larn is in dire need
+of funds, we have spared no time in preparing your tax bill.  You owe
+${taxes_owed_gp} as of this notice, and is due within 5 days.  Failure
+to pay will mean penalties.  Once again, congratulations.  We look
+forward to your future successful expeditions.
+
+
+
+--
+This E-Mail contains CONFIDENTIAL INFORMATION intended for the RECIPIENT ONLY.
+If you are not the recipient, DO NOT read the above message.  If you have
+already read the above message, please present yourself to the nearest LRS
+office for official beheading.
+
+Date: ${date}
+From: wilfred@larn.com.ln (His Majesty King Wilfred)
+To: ${player_email}
+Subject: a noble deed
+
+I have heard of your magnificent feat and I, King Wilfred, hereby
+declare this day to be a national holiday.  Furthermore, three days
+hence, ye be invited to the castle to receive the honour of ${lady} of
+the Realm.  Upon thy name shall it be written...
+
+Bravery and courage be yours.
+
+May you live in happiness for evermore...
+--
+HRH King Wilfred                                          wilfred@larn.com.ln
+"Now there's no more oak oppression/For they passed a noble law/
+ And the trees are all kept equal/By hatchet, Axe, And saw"
+                              --Neil Peart
+
+Date: ${date}
+From: endelford@larn.gov.ln (Count Endelford)
+To: ${player_email}
+Subject: You bastard!
+
+I heard (from sources) of your journey.  Congratulations!  You
+bastard!  With several attempts I have yet to endure the caves, and
+you, a nobody, make the journey!  From this time onward, be warned:
+upon our meeting you shall pay the price!
+
+
+--
+Edward Augustus Penished, Eighth Count of Endelford
+endelford@larn.gov.ln
+"Ask me about BitCoin opportunites."
+
+Date: ${date}
+From: mainair@lol.com.ln (Duke of Larnty)
+To: ${player_email}
+Subject: High Praise
+
+With a certainty, a hero I declare to be amongst us!  A nod of favour
+I send to thee.  Methinks Count Endelford this day of right breaths
+fire as of dragon of whom ye are slayer.  I yearn to behold his anger
+and jealously.  Should ye choose to unleash some of thy wealth upon
+those who be unfortunate, I, Duke Mainair, Shall equal thy gift also.
+
+
+--
+Get FREE E-Mail and more at Larn Online!
+    http://lol.com.ln/subscribe
+
+Date: ${date}
+From: stmarys@smch.org.ln (St. Mary's Children's Home)
+To: ${player_email}
+Subject: these poor children
+
+News of your great conquest has spread to all of Larndom.  Might I
+have a moment of a great ${woman}'s time?  We here at St.  Mary's
+Children's Home are very poor and many children are starving.  Disease
+is widespread and very often fatal without good food.  Could you
+possibly find it in your heart to help us in our plight?  Whatever you
+could give would help much.  (your gift is tax-deductible)
+
+--
+Get FREE E-Mail and more at Larn Online!
+    http://lol.com.ln/subscribe
+
+Date: ${date}
+From: enhancements@longsticks.com.ln (Stick Up for Lances)
+To: ${player_email}
+Subject: STRENGTHEN YOUR LANCE
+
+Is your Lance of Death starting to droop?  Is it not performing when
+you need it most?  Does it lack the reach that you need?
+
+Then you need Stick Up, the world's first patent-pending Lance of
+Death enhancement wax.  Just rub it into your lance and you'll see
+improvements immediately.
+
+Don't wait. Just click [HERE] and order Stick Up for only 49 gp.
+
+
+--
+Get FREE E-Mail and more at Larn Online!
+    http://lol.com.ln/subscribe
+
+Date: ${date}
+From: test@lol.com.ln (Reverend Doctor Judge Pontius Ben)
+To: ${player_email}
+Subject: Business Opportunity
+
+Dear Mr ${player_email},
+
+Allow me to introduce myself.  I am an attorney representing the sole
+heir of the recently deceased God of Hellfire.
+
+As you know, Mr O'Hellfire had amassed considerable wealth prior to
+his tragic death.  However, due to certain unfounded allegations of
+illegality these assets are now frozen.  This is especially
+unfortunate for my client who is currently destitute and needs to sell
+timeshares in order to survive.
+
+Fortunately, I have come upon an unfrozen account in the name of
+Mr. O'Hellfire currently holding slightly more than ten million
+(10,000,000) gold pieces. I require a discreet intermediary who is
+willing to receive this money and then forward it to my client.  In
+return, this intermediary will earn fifteen percent (15%) of the
+account's value as a commission.
+
+Please contact me if you are interested in participating in this
+venture.
+
+
+--
+Get FREE E-Mail and more at Larn Online!
+    http://lol.com.ln/subscribe

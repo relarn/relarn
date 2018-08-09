@@ -1,0 +1,24 @@
+
+                       Authors and Attribution
+                       =======================
+
+
+Larn was written by Noah Morgan in the mid 1980s with the last release
+posted to USENET in 1986.
+
+Ularn was written in 1987 by Phil Cordier at UC Santa Cruz based on
+the Larn source code.  It is currently maintained by Josh Brandt who
+took it over in 2001.
+
+iLarn by Bridgit Spitznagel (aka i0lanthe) was derived from Ularn in
+the early 2000s as a version of Ularn for PalmOS devices.
+
+ReLarn was written by Chris Reuter between 2010 and 2018.  It was
+derived from Ularn version "1.15ish" dated "16 November 2001" with
+some elements taken from iLarn.
+
+These are all of the contributors that I know of; there are likely
+many others.
+
+
+

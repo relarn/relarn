@@ -1,0 +1,127 @@
+=head1 NAME
+
+relarn - Explore the Caves of Larn
+
+=head1 SYNOPSIS
+
+relarn [ -i ] [ -s ] [ -n ] [ -h ] [ -v] [ -o filename ] [ -d num ]
+
+=head1 DESCRIPTION
+
+ReLarn is a Roguelike game in the style of Nethack or Angband.  It is
+a fork of Ularn, the classic Roguelike (which is itself a fork of
+Larn) that (mostly) preserves the original's gameplay while being
+better suited to modern computers and operating systems.  Although
+there are significant differences between the games, the majority of
+the changes are internal.
+
+Running C<relarn> with no arguments will continue the current game or
+start a new via a set of menus.  Once the game begins, online help is
+available via the '?' key; that should be sufficient for playing the
+game.  This will show all of the available commands.
+
+Players who successfully finish the game (i.e. win it) will receive
+fake game-related email messages in the file F<~/.relarn/inbox>, a
+mail folder in the C<mbox> format.  If an email client has been
+configured, it will also be launched just before relarn exits.
+
+(C<Ularn> would send you actual email; back in those days, that worked
+reliably on most Unix systems.)
+
+ReLarn also maintains a score file which can be viewed using the B<-i>
+and B<-s> options.  This will display the scores of only the winning
+players and of all players respectively.
+
+On startup, C<relarn> looks for a configuration file at
+F<~/.relarn/relarnrc> and if present, reads it.  A documented sample
+can be found at F<share/relarn/doc/relarnrc.sample>.
+
+Unlike other Roguelikes for Unix, C<ReLarn> will not prevent cheating
+by users with different accounts on the same computer.  The scoreboard
+is world-writable and saved games are stored in the player's home
+directory with no anti-tampering mechanism in place.  If cheating is a
+problem (e.g. if you're running a tournament), you will need to limit
+users' access to the computer hosting the game.
+
+Related to this, C<relarn> has a debugging mode that is active when
+the program can determine that its executable is writable by the
+current user.  Note that this means the executable must be invoked
+with an explicit path rather than using the system path.  Debug
+features are accessible via a menu that can be brought up by pressing
+the underscore (C<_>) key.  The concept of "wizard mode" from Ularn
+remains but can be toggled from the menu; see the source code to see
+how it can be useful.
+
+ReLarn currently only supports TTY graphics via the C<ncurses>
+library.  Future releases may support other interfaces as well.
+
+
+=head1 OPTIONS
+
+=over
+
+=item -i, -s
+
+Displays the scoreboard (if present). B<-i> shows only the winners'
+scoreboard while B<-s> shows the whole thing.
+
+=item -n
+
+Suppresses the introductory text.
+
+=item -o I<filename>
+
+Specifies a supplementary config file. This is read in after the
+default config file and can override it.
+
+=item -d I<difficulty level>
+
+Specifies the difficulty level when starting a new game.
+
+=item -h, -v
+
+Print argument help or the version number and exit.
+
+=back
+
+=head1 FILES
+
+ReLarn uses a number of files in your home directory.  These are:
+
+=over
+
+=item F<~/.relarn/> is the main config directory; also holds save files.
+
+=item F<~/.relarn/relarnrc> is the default configuration file.
+
+=item F<~/.relarn/inbox> is the mail folder; it will be created if not present.
+
+=back
+
+The are also some relevant files in F<$RELARN_INSTALL_ROOT/share/relarn/doc>.
+
+=head1 ENVIRONMENT
+
+C<relarn> searches for its resource files relative to a root directory
+that is set at compile time.  This default can be overridden by
+setting the environment variable C<RELARN_INSTALL_ROOT>.  This is
+usually done by a wrapper script.
+
+
+=head1 AUTHOR, COPYRIGHT, LICENSING
+
+ReLarn is Copyright (C) 1986-2018 The Authors and is Free Software
+under the terms of the GNU General Public License version 2.0.  There
+is NO WARRANTY, to the extent permitted by law.
+
+ReLarn was derived from Ularn by Chris Reuter.  Ularn was derived from
+Larn by Phil Cordier and others. Larn was written by Noah Morgan with
+other collaborators.
+
+See the included files F<Copyright.txt>, F<LICENSE.txt> and
+F<AUTHORS.txt> for more details.
+
+
+=head1 BUGS
+
+There are no bugs in ReLarn, only alternative features.

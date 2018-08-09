@@ -1,0 +1,44 @@
+                           |Playing ReLarn|
+
+Movement:                  .  wait one turn             W  wear armor
+                           Z  teleport yourself         T  take off armor
+    y  k  u                ^  identify a trap           w  wield a weapon
+     \\ \| \/                 C  close an open door        d  drop an item
+  h -- @ -- l                                           g  show pack weight
+     \/ \| \\                 D  display what you know     i show your inventory
+    b  j  n                P  give tax status
+                                                        c  cast a spell
+(SHIFT to run)             v  print program version     q  quaff a potion
+                           ?  this help screen          e  eat something
+                
+                           Q  quit the game           
+                           S  save and quit           
+
+
+
+                               |Hints|
+
+ |*| Pressing ESCAPE will exit most things
+ |*| You can select item 'j' or 'k' in a list with |CTRL+V j| or |CTRL+V k|
+
+
+
+
+ReLarn is Copyright (C) 1986 - 2018 by The Authors. See |Copyright.txt|
+and |AUTHORS.txt| for details.
+
+ReLarn is free software; you can redistribute it and\/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation; either version 2 of the License, or (at your
+option) any later version.
+
+This program is distributed in the hope that it will be useful, but
+|WITHOUT ANY WARRANTY|; without even the implied warranty of |MERCHANTABILITY|
+or |FITNESS FOR A PARTICULAR PURPOSE|. See the GNU General Public License
+for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program as the file |LICENSE.txt|; if not, please see
+http:\/\/www.gnu.org\/licenses\/old-licenses\/gpl-2.0.txt.
+
+
