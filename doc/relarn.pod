@@ -121,6 +121,9 @@ other collaborators.
 See the included files F<Copyright.txt>, F<LICENSE.txt> and
 F<AUTHORS.txt> for more details.
 
+Pop culture artifacts referenced in ReLarn are the properties of their
+respective owners.  Mentions in the game or documention are not
+intended to imply any kind of relationship with the rights holders.
 
 =head1 BUGS
 
