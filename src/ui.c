@@ -1029,15 +1029,23 @@ promptdir(bool allowCancel) {
 
 
 /* Display multiple lines of text on the screen until the user
- * dismisses them.  Splits on newlines.*/
+ * dismisses them.  Splits on newlines.  You must provide at least one
+ * string because of ISO C vararg rules. */
 void
-billboard(bool center, ...) {
+billboard(bool center, const char *heading, ...) {
     va_list ap; /* pointer for variable argument list */
     struct TextBuffer *tb;
 
     tb = tb_malloc(INF_BUFFER, 80);
 
-    va_start(ap, center);
+    // The first line.  (This is because ISO C forbids using types
+    // that can be implicitly promoted in a vararg argument list as
+    // the start of a vararg list.  bool gets promoted to int, which
+    // issues a warning, which I make into an error via -Werror, so
+    // here we are.)
+    tb_appendline(tb, heading);
+
+    va_start(ap, heading);
 
     for (;;) {
         const char *line;

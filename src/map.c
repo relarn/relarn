@@ -176,7 +176,8 @@ savegame_to_file(FILE *fh) {
     bwrite(fh, &filesum, (char *)&UU, sizeof(UU), &errorOccurred);
     bwrite(fh, &filesum, (char *)&GS, sizeof(GS), &errorOccurred);
     bwrite(fh, &filesum, (char *)&LevelNum, sizeof(LevelNum), &errorOccurred);
-    bwrite(fh, &filesum, (char * )Invent, sizeof(struct Object) * IVENSIZE, &errorOccurred);
+    bwrite(fh, &filesum, (char *)Invent, sizeof(struct Object) * IVENSIZE,
+           &errorOccurred);
 
     for (i = 0; i < OBJ_COUNT; i++) {
         known[i] = Types[i].isKnown;

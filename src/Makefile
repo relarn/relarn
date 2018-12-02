@@ -13,7 +13,7 @@ PLATFORM := $(shell uname -psr)
 #  	name of program
 PROGRAM	= relarn$(EXT)
 
-# 	for termcap functions
+# 	for console UI
 SYS_LIBRARIES=	-lcurses 
 
 #   link flags

@@ -81,7 +81,7 @@ void promptToContinue(void);
 char quickinv(const char *action, const char *candidates, bool dashForNone,
               bool allowGold);
 DIRECTION promptdir(bool allowCancel);
-void billboard(bool center, ...);
+void billboard(bool center, const char *heading, ...);
 void say(const char *fmt, ...);
 
 void nap(int x);
