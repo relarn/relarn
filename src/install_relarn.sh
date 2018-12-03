@@ -30,8 +30,10 @@ for d in Umaps Ufortune Uhelp Uintro Ujunkmail; do
 	chmod 664 "$LIBDIR/$d"
 done
 
-# Create the score directory
+# Create the score directory and empty scorefile.
 mkdir -p "$SCOREDIR"
+touch "$SCOREDIR/Relarn-scoreboard"     # TODO: derive this from sources
+chmod a+rw "$SCOREDIR/Relarn-scoreboard"
 
 # Create the executable directories and install the executable and
 # launch script.

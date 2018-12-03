@@ -5,8 +5,6 @@
 
 #include "internal_assert.h"
 
-#include <assert.h>
-
 
 /* Test if 'filename' is a file that exists and is readable. */
 bool
@@ -126,9 +124,9 @@ void
 adjpoint(int x, int y, DIRECTION dir, int *outx, int *outy) {
     static const int offx[] = { 0, 0,  0, 1, 0, -1,  1, -1, 1, -1 };
     static const int offy[] = { 0, 0, -1, 0, 1,  0, -1, -1, 1,  1 };
-    
-    assert(dir < sizeof(offx)/sizeof(offx[0]) && dir < sizeof(offy)/sizeof(offy[0]));
 
+    ASSERT(dir < sizeof(offx)/sizeof(offx[0]) && dir < sizeof(offy)/sizeof(offy[0]));
+    
     *outx = x + offx[dir];
     *outy = y + offy[dir];
 }// adjpoint

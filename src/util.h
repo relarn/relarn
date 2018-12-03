@@ -26,6 +26,9 @@ typedef enum {
     DIR_NORTHWEST = 7,
     DIR_SOUTHEAST = 8,
     DIR_SOUTHWEST = 9,
+
+    DIR_MIN_DIR   = DIR_NORTH,      // First dir. that's a real direction
+    DIR_MAX       = DIR_SOUTHWEST,  // Last dir. that's a real direction
 } DIRECTION;
 
 

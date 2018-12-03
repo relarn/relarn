@@ -1,8 +1,9 @@
 
 #include "stringbuilder.h"
 
-#include <assert.h>
 #include <limits.h>
+
+#include "internal_assert.h"
 
 #include "util.h"
 
@@ -34,8 +35,8 @@ sb_append(struct StringBuilder *sb, const char *text) {
     sb->buffer = xrealloc(sb->buffer, sb->length + 1);
     strcat(sb->buffer, text);
 
-    assert(sb->length == strlen(sb->buffer));
-    assert(sb->length < LONG_MAX);
+    ASSERT(sb->length == strlen(sb->buffer));
+    ASSERT(sb->length < LONG_MAX);
 }
 
 // Append a single char to 'sb'.
@@ -51,7 +52,7 @@ sb_append_char(struct StringBuilder *sb, char c) {
 // Free the builder, returning the alloc'd content.
 char *
 sb_str_and_free(struct StringBuilder *sb) {
-    assert(sb);
+    ASSERT(sb);
     
     const char *str = sb->buffer;
     free(sb);

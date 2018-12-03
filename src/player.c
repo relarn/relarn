@@ -1,8 +1,6 @@
 // This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
-#include <assert.h>
-
 #include "internal_assert.h"
 
 #include "display.h"
@@ -393,7 +391,8 @@ moveplayer (DIRECTION dir, bool* success) {
     }/* if */
 
     if (UU.confuse && UU.level < rnd(30) && dir != DIR_STAY) {
-        dir=rund(9) + DIR_NORTH; /*if confused any dir*/
+        // If confused, any dir.
+        dir = rund(DIR_MAX - DIR_MIN_DIR) + DIR_MIN_DIR;
     }/* if */
 
     adjpoint(UU.x, UU.y, dir, &new_x, &new_y);
@@ -446,7 +445,7 @@ statfor(int slot) {
     struct Object obj;
 
     if (slot < 0) return 0;
-    assert(slot < IVENSIZE);
+    ASSERT(slot < IVENSIZE);
 
     obj = Invent[slot];
     if (!obj.type) return 0;    /* Probably not needed. */

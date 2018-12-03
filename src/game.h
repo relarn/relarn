@@ -11,7 +11,7 @@
 
 /* Death codes to pass to die. */
 enum GAME_ENDING {
-    DD_DUMMY = MAXCREATURE + 1,   // Ensure count doesn't overlap a creature
+    DD_DUMMY = NUM_MONSTERS + 1,   // Ensure count doesn't overlap a creature
 
 #define ENDING(id, name) id,
 #   include "game_endings.h"
