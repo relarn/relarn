@@ -54,7 +54,7 @@ struct Player {
     long level;     // Experience level
     long regen;
     long wclass;
-    long ac;
+    long ac;                // Updated by recalc()
     long bankaccount;
     char bankvisits;    // This is used to rotate bank slogans.
     long spellmax;
@@ -174,6 +174,7 @@ void enchantarmor(enum ENCH_HOW how);
 
 bool graduated(struct Player *p);
 void regen(void);
+void recalc(void);
 
 const char *levelDesc(int level);
 

@@ -80,8 +80,6 @@ obank(bool isMain) {
     }/* if */
 
     bankmenu(title);
-
-    update_stats();
 }/* obank*/
 
 

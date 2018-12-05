@@ -20,9 +20,6 @@ struct Player UU;
 struct Object Invent[IVENSIZE];
 
 
-static void recalc(void);
-
-
 /* Return a (read-only) string describing the character class given by
  * 'cc'. */
 const char *
@@ -489,8 +486,9 @@ carrymod(enum OBJECT_ID oid) {
 
 
 
-// recalc()    function to recalculate the armor class of the player
-static void
+// recalc() function to recalculate the armor class, weapon class,
+// etc.  of the player
+void
 recalc () {
     UU.ac = UU.moredefenses
         + statfor(UU.wear)
@@ -778,8 +776,6 @@ drop_gold (unsigned long amount) {
 
     o->type = OGOLDPILE;
     o->iarg = dropamt;
-
-    update_stats();
 
     Map[UU.x][UU.y].know=0;
     cancelLook();

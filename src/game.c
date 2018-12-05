@@ -74,19 +74,34 @@ cancelLook() {
     noLook = true;
 }/* cancelLook*/
 
-/* Return true if appropriate to keep running, false if not.  Monster
- * move is disabled if noMonMove is true.*/
+
+
+// Perform one turn.  There are two cases for this: normal gameplay
+// and when the player is running.  In the latter case, `dir` is set
+// to a direction of movement and the game behaves as if the player
+// had selected that direction.
+//
+//  Monster move is disabled if noMonMove is true.
 bool
 onemove(DIRECTION dir, bool noMonMove) {
     bool running = (dir != DIR_CANCEL && dir != DIR_STAY);
     bool keepRunning = !noMonMove;
     bool missedTurn = (dir == DIR_STAY);
 
+    /* Update player stat modifications due to carried/worn stuff. */
+    recalc();
+
     /* Deal with any object the player may step on.  If the player is
      * running, this is a good reason to stop. */
     if (!noLook && !missedTurn) {
         bool foundSomething;
         foundSomething = lookforobject();
+
+        // Finding a thing might update some stats so we recalculate
+        // here.
+        if (foundSomething) {
+            recalc();
+        }// if
 
         /* If we find something while running, stop now BEFORE the
          * move.  This way, the player regains control while still on
@@ -103,6 +118,7 @@ onemove(DIRECTION dir, bool noMonMove) {
         if (UU.hastemonst) movemonst();
         movemonst();
     }
+
 
     /* Display and mark seen the area around the player. */
     showplayerarea();
@@ -412,7 +428,7 @@ compute_score(bool won) {
         if (sv > 0) {
             score += sv;
         }
-    }// for 
+    }// for
 
     // Bonus for experience
     score += (UU.level - 1) * 100;
@@ -423,11 +439,11 @@ compute_score(bool won) {
         score += UU.level < 10 ? 200000 : 0;    // Winning on low exp
         score += UU.outstanding_taxes * 1000;   // No access to stores
         score += max_l(0, TIMELIMIT - UU.gtime);// Bonus for finishing early
-    }// if 
+    }// if
 
     // Bonus for graduating ULarn
     score += graduated(&UU) ? score * 0.1 : 0;
-    
+
     // Finally, the challenge level becomes a score multiplier
     score *= 1.0 + (double)UU.challenge/5.0;
 
@@ -517,15 +533,15 @@ game_over_probably(unsigned cause) {
         if (!really) {
             UU.hp = UU.hpmax;
             return;
-        }// if 
-    }// if 
-    
+        }// if
+    }// if
+
     // Let the user read the final message before continuing.  (Not
     // necessary for the winner because there's just been a big
     // presentation about the potion working.)
     if (cause != DDWINNER) {
         promptToContinue();
-    }// if 
+    }// if
 
     // Player's gold is the score
     score = compute_score(cause == DDWINNER);
@@ -539,7 +555,7 @@ game_over_probably(unsigned cause) {
              UU.name, UU.level, ccname(UU.cclass),
              cause == DDWINNER ? "succeeded" : "died");
     tb_append(msg, buffer);
-    
+
     if (cause == DDWINNER) {
         tb_append(msg,
                   "Against all odds, you managed to save your "
@@ -586,8 +602,8 @@ game_over_probably(unsigned cause) {
                                 cause_desc(cause), &UU);
         if (!success) {
             printf("Error saving your score; score not saved.\n");
-        }// if 
-    }// if 
+        }// if
+    }// if
 
     // Send the official junk mail.
     if (cause == DDWINNER) {
@@ -598,7 +614,7 @@ game_over_probably(unsigned cause) {
             // Hah hah.
             printf("ERROR: The mail daemon was exorcised!\n");
         }// if .. else
-    }// if 
+    }// if
 
     delete_save_files();
 

@@ -679,7 +679,6 @@ spattack(enum SP_ATTACK attack, int xx, int yy) {
 
         headsup();
 
-        update_stats();
         return (1);
     }
 

@@ -880,8 +880,6 @@ ogold() {
     say("You find %d gold piece%s.\n",i, i==1 ? "": "s");
     UU.gold += i;  
 
-    update_stats();
-
     Map[UU.x][UU.y].obj = NullObj;
     Map[UU.x][UU.y].know = 0;
 }/* ogold*/

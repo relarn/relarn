@@ -135,6 +135,9 @@ drawcell(int x, int y) {
         return;
     }/* if */
 
+    // XXX WRONG! This should not draw the monster unless it's within
+    // the radius of the player's view.
+    
     /* Otherwise, it's the monster. */
     mapdraw(x, y, MonType[mon_id].mapchar, MF_DEFAULT);
 }/* drawcell*/
@@ -182,7 +185,6 @@ showplayerarea() {
 void
 showcellat(int x, int y, int xradius, int yradius) {
     int minx, maxx, miny, maxy;
-    int xp, yp;
 
     minx = x - xradius;
     maxx = x + xradius;
@@ -194,14 +196,14 @@ showcellat(int x, int y, int xradius, int yradius) {
     VXY(minx, miny);
     VXY(maxx, maxy);
 
-    for (yp = miny; yp <= maxy; yp++) {
-        for (xp = minx; xp <= maxx; xp++) {
+    for (int yp = miny; yp <= maxy; yp++) {
+        for (int xp = minx; xp <= maxx; xp++) {
             Map[xp][yp].know = true;
         }/* for */
     }/* for */
 
     drawscreen();
-}/* showcell*/
+}/* showcellat*/
 
 /* Show the cell at x,y and mark it as known. */
 void

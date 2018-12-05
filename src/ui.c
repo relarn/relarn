@@ -134,7 +134,7 @@ showstats(const struct Player *p, bool iswiz) {
     wmove(StatsWin, 0, 0);
 
     wprintw(StatsWin, "Spells:%3d(%2d)",p->spells,p->spellmax);
-    wprintw(StatsWin, " AC:%-2dWC:%-2dLV:%-2d", p->ac, p->wclass, p->level);
+    wprintw(StatsWin, " AC:%-3dWC:%-3dLV:%-2d", p->ac, p->wclass, p->level);
     wprintw(StatsWin, " %s:%-4d", iswiz ? "Trns": "Time",
             iswiz ? p->gtime : p->gtime / MOBUL);
     wprintw(StatsWin, " Exp: %-9d %s", p->experience, levelDesc(p->level));
