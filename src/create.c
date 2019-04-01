@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -74,28 +74,28 @@ struct Object newpotion() {
     return obj(potprob[rund(sizeof(potprob))], 0);
 }/* newpotion*/
 
-/* return leather armor with random charge or NullObj if the charge is
+/* return leather armor with random charge or NULL_OBJ if the charge is
  * zero.*/
 struct Object newleather() {
     static const char nlpts[] = { 0, 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 5, 6, 7 };
     unsigned charge = nlpts[rund(UU.challenge ? 10 : 13)];
 
     if (!charge) {
-        return NullObj;
+        return NULL_OBJ;
     }/* if */
 
     return obj(OLEATHER, charge);
 }/* newleather*/
 
 
-/* return chain mail with random charge or NullObj if the charge is
+/* return chain mail with random charge or NULL_OBJ if the charge is
  * zero.*/
 struct Object newchain() {
     static const char nch[] = { 0, 0, 0, 1, 1, 1, 2, 2, 3, 4 };
     unsigned charge = nch[rund(11)];        
 
     if (!charge) {
-        return NullObj;
+        return NULL_OBJ;
     }/* if */
 
     return obj(OCHAIN, charge);
@@ -107,13 +107,13 @@ struct Object newplate() {
     return obj(OPLATE, nplt[rund(UU.challenge ? 3 : 11)]);
 }/* newplate*/
 
-/* return new daggers or NullObj if charge rolls to 0. */
+/* return new daggers or NULL_OBJ if charge rolls to 0. */
 struct Object newdagger() {
     static const char ndgg[] = { 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 4, 5 };
     unsigned charge = ndgg[rund(13)];
 
     if (!charge) {
-        return NullObj;
+        return NULL_OBJ;
     }/* if */
 
     return obj(ODAGGER, charge);

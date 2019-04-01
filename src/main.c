@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 /* This game is bad for you. It is evil. It will rot your brain. */
@@ -19,25 +19,31 @@
 #include "version_info.h"
 
 
-static char cmdhelp[] = 
+static char cmdhelp[] =
     "Cmd line format: relarn [-sicnh] [-o <optsfile>] [-d #] [-r]\n"
-    "  -s   show the winners scoreboard\n"
-    "  -i   show the entire scoreboard\n"
-    "  -n   suppress welcome message on starting game\n"
-    "  -h   print this help text\n"
-    "  -v   print the version number and quit\n"
-    "  -o <optsfile> specify additional options file to be used\n"
-    "  -d # specify level of difficulty (example: relarn -d 5)\n";
-    
+    "  -s               show the winners scoreboard\n"
+    "  -i               show the entire scoreboard\n"
+    "  -n               suppress welcome message on starting game\n"
+    "  -h               print this help text\n"
+    "  -v               print the version number and quit\n"
+    "  -o <optsfile>    specify additional options file to be used\n"
+    "  -d <number>      specify level of difficulty (example: relarn -d 5)\n"
+    "  -b               enable UI debugging; may change in the future.\n"
+    ;
+
 
 
 static void
 parse_args(int argc, char *argv[]) {
-    const char *optstring = "sinvhro:d:";
+    const char *optstring = "bsinvhro:d:";
     int i;
 
     while ((i = getopt(argc, argv, optstring)) != -1) {
         switch(i) {
+        case 'b':
+            GameSettings.drawDebugging = true;
+            break;
+
         case 's':
             showscores(false);
             exit(0);  /* show scoreboard   */
@@ -74,7 +80,7 @@ parse_args(int argc, char *argv[]) {
             printf("%s\n", version_str());
             exit(0);
             break;
-            
+
         case '?':
         default:
             printf("Invalid option; try '-h' for help.\n");
@@ -91,12 +97,12 @@ main (int argc, char *argv[]) {
     /* Initialize OS interface. */
     init_os(argc, argv);
 
-    /* Make sure the scoreboard exists. */    
+    /* Make sure the scoreboard exists. */
     ensureboard();
 
     /* Load the junk mail templates. (Fatal on error.) */
     load_email_templates();
-    
+
     /* Initialize the global options struct. */
     initopts();
 
@@ -120,7 +126,7 @@ main (int argc, char *argv[]) {
                "Save file created by a different version of relarn" :
                "Save file is corrupted; backup save file may still work");
         exit(1);
-    }// if 
+    }// if
 
     init_ui();  /* Initialize the abstract UI. */
 
@@ -134,20 +140,19 @@ main (int argc, char *argv[]) {
             welcome();   /* welcome the player to the game */
     }
 
-    update_display(true);   /*  show the initial dungeon */
-
     /* Display a welcome message.  Also displays the character class and sex. */
-    say ("Welcome %sto xlarn, %s the %s %s\n", restorflag ? "back " : "",
-         UU.name, UU.sex == MALE ? "male" : "female", ccname(UU.cclass));
+    say ("Welcome %sto relarn, %s the %s %s\n", restorflag ? "back " : "",
+         UU.name, female(UU.gender), ccname(UU.cclass));
 
     // Inform the user that the main save file failed and this is a backup.
     if (restorflag && rs == SS_USED_BACKUP) {
         say("Save file was missing or corrupt; loaded from backup.\n");
-    }// if 
+    }// if
 
+    force_full_update();
+    update_display();   /*  show the initial dungeon */
+    
     mainloop();
 
     return 0;
 }/* main */
-
-

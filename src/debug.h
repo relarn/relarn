@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // Menu of various cheats useful for debugging and testing.

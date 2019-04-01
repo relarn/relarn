@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // Support for Unix-style OSs.
@@ -207,7 +207,13 @@ savefile_path() {
 static const char *
 backup_savefile_path() {
     static char newname[MAXPATHLEN+3];
-    snprintf(newname, sizeof(newname), "%s.1", savefile_path());
+
+    strncpy(newname, savefile_path(), sizeof(newname));
+
+    size_t len = strlen(newname);
+    newname[len - 4] = '\0';    // Truncate the trailing extension
+    strcat(newname, ".1.sav");
+
     return newname;
 }
 

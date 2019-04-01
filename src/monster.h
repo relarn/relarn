@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // Code for creating, destroying and managing in-game creatures.
@@ -7,6 +7,7 @@
 #define HDR_GUARD_MONSTER_H
 
 #include "player.h"
+#include "internal_assert.h"
 
 
 struct MonstTypeData {
@@ -23,7 +24,7 @@ struct MonstTypeData {
     unsigned long   flags;
 };
 
-/* 
+/*
  *  Flags for monst structure
  */
 enum MONSTER_FLAG {
@@ -34,18 +35,17 @@ enum MONSTER_FLAG {
     FL_NOPIT      = 0x08,  /* Won't move over a pit. */
     FL_SLOW       = 0x10,  /* Moves at half speed. */
     FL_INVISIBLE  = 0x20,  /* Non-demonic invisiblity. */
+    FL_DRAGON     = 0x40,  /* It's a dragon for Orb purposes. */
 };
 
 extern struct MonstTypeData MonType[];
 
 struct Monster {
     short hitp;
-    uint8_t id;
+    uint8_t id;             // Monster ID; 0 means no monster.
     int moved       :1;     // Has the monster here moved this turn?
-    int awake       :1;     // Is the monster awake? (i.e. no stealth)
+    int awake       :1;     // Will it notice a stealthy player?
 };
-
-extern const struct Monster NullMon;
 
 /* Big enum of monster IDs. */
 enum MONSTER_ID {
@@ -55,8 +55,12 @@ enum MONSTER_ID {
 #undef MONSTER
 
     MAXCREATURE  = DEMONLORD1,   /* The max. number of non-demon monsters.*/
-    NUM_MONSTERS = DEMONKING,    /* The number of monsters. */
+    LAST_MONSTER = DEMONKING,    /* The number of monsters. */
 };
+
+
+#define NULL_MON ((struct Monster) {0, 0, 0, 0})
+
 
 
 /* Big enum of special attacks. */
@@ -102,12 +106,14 @@ bool cantsee(struct Monster mon);
 
 // Return default monster hitpoints adjusted for challenge level
 static inline short mon_hp(uint8_t id) {
+    ASSERT(id <= LAST_MONSTER);
     return min(0xFFFF,  ((6 + UU.challenge) * MonType[id].hitpoints + 1) / 6);
 }
 
 // Return the experience gained from killing a monster of type 'id'
 // adjusted for the challenge level.
 static inline long mon_exp(uint8_t id) {
+    ASSERT(id <= LAST_MONSTER);
     return max_l( 1, (7 * MonType[id].experience) / (7 + UU.challenge) + 1);
 }// mon_hp
 
@@ -118,11 +124,25 @@ static inline struct Monster mk_mon(uint8_t id) {
 }// mk_mon
 
 
+
+
 static inline bool ismon(struct Monster mon)  {return mon.id != NOMONST; }
 static inline short maxhp(struct Monster mon) {return MonType[mon.id].hitpoints;}
 static inline const char *monname_mon(struct Monster mon) {return monname(mon.id);}
+static inline char monchar(enum MONSTER_ID id) {return MonType[id].mapchar; }
+static inline char monchar_mon(struct Monster mon) {return monchar(mon.id);}
 static inline long monflags(struct Monster mon) {return MonType[mon.id].flags;}
-static inline bool isdemon(struct Monster mon) {return !!(monflags(mon) & FL_DEMON);}
-static inline bool isslow(struct Monster mon) {return !!(monflags(mon) & FL_SLOW);}
+
+static inline bool isdemon(struct Monster mon) {
+    return !!(monflags(mon) & FL_DEMON);
+}
+
+static inline bool isslow(struct Monster mon) {
+    return !!(monflags(mon) & FL_SLOW);
+}
+
+static inline bool isdragon(struct Monster mon) {
+    return !!(monflags(mon) & FL_DRAGON);
+}
 
 #endif

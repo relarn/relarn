@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "diag.h"
@@ -38,7 +38,7 @@ showCreated(const char *desc, FILE *dfile) {
     int j;
 
     fprintf(dfile, "Created Items%s:\n", desc);
-    for (j = 0; j < OBJ_COUNT; j++) {
+    for (j = 0; j < OBJ_CONCRETE_COUNT; j++) {
         if (UU.created[j]) {
             fprintf(dfile, "    %s\n", Types[j].desc);
         }
@@ -77,7 +77,7 @@ diag() {
     fprintf(dfile, "Settings: difficulty: %d, sex: %d, name: \"%s\"\n"
             "    nointro: %d nonap: %d email: \"%s\" cclas: %d "
             "nobeep: %d\n\n",
-            GameSettings.difficulty, GameSettings.sex,
+            GameSettings.difficulty, GameSettings.gender,
             GameSettings.name, GameSettings.nointro, GameSettings.nonap,
             GameSettings.emailClient, GameSettings.cclass, GameSettings.nobeep);
             
@@ -130,12 +130,12 @@ diag() {
     showCreated(" (post-diag)", dfile);
 
     fprintf(dfile, "\n\nNow for the monster data:\n\n");
-    fprintf(dfile, "\nTotal types of monsters: %d\n\n", NUM_MONSTERS);
+    fprintf(dfile, "\nTotal types of monsters: %d\n\n", LAST_MONSTER + 1);
     fprintf(dfile, "   Monster Name      LEV  AC   DAM  ATT  GOLD   HP     EXP\n");
     fprintf(dfile, "-------------------------------------------------------"
             "----------\n"); fflush(dfile);
 
-    for (i = 0; i <= NUM_MONSTERS; i++) {
+    for (i = 0; i <= LAST_MONSTER; i++) {
         fprintf(dfile, "%19s  %2d  %3d ", 
                 MonType[i].name, 
                 MonType[i].level, 
@@ -151,7 +151,7 @@ diag() {
     }
 
     fprintf(dfile, "\nAvailable potions:\n\n");
-    for (i = 0; i < OBJ_COUNT; i++) {
+    for (i = 0; i < OBJ_CONCRETE_COUNT; i++) {
         if (Types[i].flags & OA_POTION) {
             fprintf(dfile, "%19s\n", Types[i].desc);
         }
@@ -203,7 +203,7 @@ diagdrawscreen(FILE *dfile) {
     for (i = 0; i < MAXY; i++) {            
         for (j = 0; j < MAXX; j++)
             if ( (k = Map[j][i].mon.id) )
-                fprintf(dfile, "%c", MonType[k].mapchar);
+                fprintf(dfile, "%c", monchar(k));
             else
                 fprintf(dfile, "%c", Types[Map[j][i].obj.type].symbol);
         fprintf(dfile, "\n");

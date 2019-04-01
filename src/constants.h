@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // This file holds most of the global constants
@@ -46,7 +46,7 @@
 
 
 #define COPYRIGHT                                                       \
-  "ReLarn Copyright (C) 1986-2018 by The Authors.\n"                    \
+  "ReLarn Copyright (C) 1986-2019 by The Authors.\n"                    \
   "ReLarn comes with ABSOLUTELY NO WARRANTY.\n"                         \
   "You may redistribute copies of ReLarn\n"                             \
   "under the terms of the GNU General Public License.\n"                \

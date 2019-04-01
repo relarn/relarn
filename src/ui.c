@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -21,6 +21,18 @@
 #define CONSOLE_Y (StatsY + StatsHeight)
 #define CONSOLE_H 6
 
+enum ColorPairs {
+    CLR_PLAYER = 1,
+    CLR_INVIS = 2,
+    CLR_EFFECT = 3,
+    CLR_UNSEEN = 4,
+    CLR_FOV = 5,
+
+    // Debug colors
+    CLR_DBG1, CLR_DBG2, CLR_DBG3, CLR_DBG4,
+    CLR_DBG5, CLR_DBG6, CLR_DBG7
+};
+
 static bool pick_backend(struct PickList *pl, const char *headings[],
                          int hcount, bool *selections, bool multi);
 
@@ -37,14 +49,28 @@ static const int MapHeight = MAXY;
 static const int IndWidth = SCREEN_W - MAXX;
 static const int IndHeight = MAXY;
 
-static const short ClrPlayer = 1;
-static const short ClrInvis = 2;
-static const short ClrEffect = 3;
-
 static const short StatsY = MAXY;
 static const short StatsHeight = 2;
 
 static void update_msg(void);
+
+
+// Rotating colors as a debugging aid
+static void
+debugCycleBackground (WINDOW *win) {
+    static int curr = 0;
+    static int COLORS[] = {
+        CLR_DBG1, CLR_DBG2, CLR_DBG3, CLR_DBG4,
+        CLR_DBG5, CLR_DBG6, CLR_DBG7,
+    };
+
+    // Do nothing unless debugging is enabled
+    if (!GameSettings.drawDebugging) { return; }
+
+    curr = rund(sizeof(COLORS)/sizeof(chtype));
+    wattrset(win, COLOR_PAIR(COLORS[curr]));
+}// getDbgClr
+
 
 
 void
@@ -60,18 +86,34 @@ init_ui() {
     if (!getenv("ESCDELAY")) {
         set_escdelay(DEFAULT_ESC_DELAY);
     }
-    
 
     if (has_colors()) {
         start_color();
         use_default_colors();
-        init_pair(ClrPlayer, COLOR_RED, -1);
-        init_pair(ClrInvis, COLOR_CYAN, -1);
-        init_pair(ClrEffect, COLOR_BLUE, -1);
+        init_pair(CLR_PLAYER, COLOR_RED, -1);
+        init_pair(CLR_INVIS, COLOR_CYAN, -1);
+        init_pair(CLR_EFFECT, COLOR_CYAN, -1);
+        init_pair(CLR_UNSEEN, -1, COLOR_WHITE);
+        init_pair(CLR_FOV, -1, COLOR_YELLOW);
+
+        init_pair(CLR_DBG1, -1, COLOR_RED);
+        init_pair(CLR_DBG2, -1, COLOR_GREEN);
+        init_pair(CLR_DBG3, -1, COLOR_YELLOW);
+        init_pair(CLR_DBG4, -1, COLOR_BLUE);
+        init_pair(CLR_DBG5, -1, COLOR_MAGENTA);
+        init_pair(CLR_DBG6, -1, COLOR_CYAN);
+        init_pair(CLR_DBG7, -1, COLOR_WHITE);
     }/* if */
 
-    ConsoleBuffer = tb_malloc (75, SCREEN_W);
+    ConsoleBuffer = tb_malloc (
+        300,
+//CONSOLE_H,
+        SCREEN_W);
+
     ConsoleWin = newwin(CONSOLE_H, SCREEN_W, CONSOLE_Y, 0);
+    scrollok(ConsoleWin, true);
+    idlok(ConsoleWin, true);
+
     StatsWin = newwin(StatsHeight, SCREEN_W, StatsY, 0);
     IndWin = newwin(IndHeight, IndWidth, 0, MapWidth);
     MapWin = newwin(MapHeight, MapWidth, 0, 0);
@@ -79,7 +121,7 @@ init_ui() {
     // Sanity check
     ENSURE_MSG(ConsoleWin && StatsWin && IndWin && MapWin,
                "Error creating curses window.");
-    
+
     keypad(MapWin, true);
 }/* init_ui*/
 
@@ -126,30 +168,49 @@ sync_ui(bool force) {
     doupdate();
 }/* sync_ui*/
 
+
 void
-showstats(const struct Player *p, bool iswiz) {
-    char buf[20];
+showstats(const struct Player *p, bool iswiz, bool force) {
     bool hidefloor = p->teleflag && !iswiz;
 
-    wmove(StatsWin, 0, 0);
+    char line1[120];
+    snprintf(line1, sizeof(line1),
+             "Spells:%3ld(%2ld) AC:%-3ld WC:%-3ld LV:%-2d %s:%-4ld Exp: %-9ld %s",
+             p->spells, p->spellmax,
+             p->cached_ac, p->cached_wc, p->level,
+             iswiz ? "Trns": "Time", iswiz ? p->gtime : p->gtime / MOBUL,
+             p->experience, levelDesc(p->level));
 
-    wprintw(StatsWin, "Spells:%3d(%2d)",p->spells,p->spellmax);
-    wprintw(StatsWin, " AC:%-3dWC:%-3dLV:%-2d", p->ac, p->wclass, p->level);
-    wprintw(StatsWin, " %s:%-4d", iswiz ? "Trns": "Time",
-            iswiz ? p->gtime : p->gtime / MOBUL);
-    wprintw(StatsWin, " Exp: %-9d %s", p->experience, levelDesc(p->level));
+    char buf[20], line2[120];
+    snprintf(buf, sizeof(buf), "%ld (%ld)", p->hp, p->hpmax);
+    snprintf(line2, sizeof(line2),
+             "HP: %11s STR=%-2ld INT=%-2ld WIS=%-2ld CON=%-2ld DEX=%-2ld "
+             "CHA=%-2ld LV:%2s%s Gold: %-8ld",
+             buf, p->strength+p->strextra, p->intelligence,
+             p->wisdom, p->constitution, p->dexterity, p->charisma,
+             hidefloor ? " ?" : getlevelname(),
+             iswiz ? " W" : "  ",
+             p->gold);
+
+
+    debugCycleBackground(StatsWin);
+
+    // Skip drawing the update if the stats haven't changed. (We could
+    // do each line separately but for now I'm skipping that to avoid
+    // the extra complexity.)
+    static char prevline1[sizeof(line1)], prevline2[sizeof(line2)];
+    if (!force && strcmp(line1,prevline1) == 0 && strcmp(line2,prevline2) == 0){
+        return;
+    }// if
+
+    wmove(StatsWin, 0, 0);
+    wprintw(StatsWin, "%s", line1);
 
     wmove(StatsWin, 1, 0);
-    snprintf(buf, sizeof(buf), "%ld (%ld)", p->hp, p->hpmax);
-    wprintw(StatsWin, "HP: %11s STR=%-2d INT=%-2d ",
-            buf, p->strength+p->strextra, p->intelligence);
-    wprintw(StatsWin, "WIS=%-2d CON=%-2d DEX=%-2d CHA=%-2d LV:%2s%s",
-            p->wisdom, p->constitution, p->dexterity, p->charisma,
-            hidefloor ? " ?" : getlevelname(),
-            iswiz ? " W" : "  ");
+    wprintw(StatsWin, "%s", line2);
 
-    wmove(StatsWin, 1, SCREEN_W - 14);
-    wprintw(StatsWin, "Gold: %-8d",p->gold);
+    strcpy(prevline1, line1);
+    strcpy(prevline2, line2);
 }/* showstats*/
 
 
@@ -181,7 +242,7 @@ mapdraw(int x, int y, char sym, enum MAPFLAGS flags) {
 
     switch(flags) {
     case MF_EFFECT:
-        symbol |= A_REVERSE|COLOR_PAIR(ClrEffect);
+        symbol |= A_REVERSE|A_DIM|COLOR_PAIR(CLR_EFFECT);
         break;
 
     case MF_OBJ:
@@ -189,17 +250,36 @@ mapdraw(int x, int y, char sym, enum MAPFLAGS flags) {
         break;
 
     case MF_PLAYER:
-        symbol |= A_REVERSE|COLOR_PAIR(ClrPlayer);
+        symbol |= A_REVERSE|COLOR_PAIR(CLR_PLAYER);
         break;
 
     case MF_PLAYER_INV:
-        symbol |= A_REVERSE|COLOR_PAIR(ClrInvis);
+        symbol |= A_REVERSE|COLOR_PAIR(CLR_INVIS);
+        break;
+
+    case MF_NOTSEEN:
+        if (GameSettings.showUnrevealed) {
+            symbol |= A_DIM|COLOR_PAIR(CLR_UNSEEN);
+        }
+        break;
+
+    case MF_FOV:
+        if (GameSettings.showFoV) {
+            symbol |= COLOR_PAIR(CLR_FOV);
+        }
         break;
 
     case MF_DEFAULT:
         /* Do nothing. */
         break;
     }/* switch*/
+
+    // This should only happen once per update, so this will
+    // (hopefully) remain useful while not turning the screen into an
+    // unreadable mess.
+    if (x == UU.x && y == UU.y) {
+        debugCycleBackground(MapWin);
+    }
 
     mvwaddch(MapWin, y, x, symbol);
 }/* mapdraw*/
@@ -212,7 +292,7 @@ static void
 addfmt (WINDOW *win, const char *text) {
     bool isBold = false;
     bool isUnderline = false;
-    
+
     bool escape = false;
     for (int n = 0; text[n]; n++) {
         int letter = text[n];
@@ -221,7 +301,7 @@ addfmt (WINDOW *win, const char *text) {
             escape = true;
             continue;
         }
-        
+
         if (!escape && letter == '|') {
             isBold = !isBold;
             continue;
@@ -245,7 +325,7 @@ addfmt (WINDOW *win, const char *text) {
 
         escape = false;
     }/* for */
-    
+
     wrefresh(win);
 }/* addfmt */
 
@@ -323,7 +403,7 @@ showpages_prompt(struct TextBuffer *tb, bool prompt) {
 
             // Detecting the enter/return key is a bit complicated...
             bool is_enter = i == KEY_ENTER || i == '\n' || i == '\r';
-            
+
             // If just displaying, look for an exit
             if (!prompt) {
                 if (is_enter || i == ESC) { goto finished; }
@@ -583,10 +663,10 @@ mk_pick_scroller(struct PickList *pl, bool *sel, int height, int y_pos) {
 static void
 redraw_scroller(WINDOW *scroller, struct PickList *pl, bool *selections,
                 int scrlHeight, int pos, int *prevPos, int *first_p) {
-    
+
     // Make a local copy for readability; updated before returning
     int first = *first_p;
-    
+
     // Scroll if we need to
     if (pos >= first + scrlHeight) {   /* Need to scroll up. */
         wscrl(scroller, 1);
@@ -635,7 +715,7 @@ move_selection(int key, WINDOW *scroller, struct PickList *pl,bool *selections,
         redraw_scroller(scroller, pl, selections, scrlHeight, *pos, prevPos,
                         first);
         napms(7);
-    }// while 
+    }// while
 }// move_selection
 
 
@@ -653,7 +733,7 @@ pick_backend(struct PickList *pl, const char *headings[], int hcount,
     ASSERT(hcount < SCREEN_H - 15);
 
     int scrlHeight = (SCREEN_H - 5) - hcount;
-    
+
     WINDOW *parent = mk_pick_parent(headings, hcount, multi);
     WINDOW *scroller = mk_pick_scroller(pl, selections, scrlHeight, hcount+1);
     wrefresh (parent);
@@ -694,7 +774,7 @@ pick_backend(struct PickList *pl, const char *headings[], int hcount,
         case ' ':   // Space selects but only in multi mode
             if (!multi) { break; }
             // Fall through...
-            
+
         case '\n':
             /* Select current item unless it's empty. */
             if (pl->items[pos].description[0]) {
@@ -718,7 +798,7 @@ pick_backend(struct PickList *pl, const char *headings[], int hcount,
             if (!multi) {
                 goto done;
             }
-        }// if 
+        }// if
 
         // Hilight the new line, possibly with scrolling.
         redraw_scroller(scroller, pl, selections, scrlHeight, pos, &prevPos,
@@ -734,6 +814,90 @@ done:
 
     return retval;
 }/* pick_item */
+
+
+// Prompt the user for a line of text without using the console
+// window.  Returns true if text was selected and is non-empty, false
+// if cancelled via ESCAPE.  Text is written to 'result'; if 'result'
+// already has text in it, that is used as the initial value.
+//
+// (Currently, this is only used to let the player enter their
+// character name on startup.)
+static bool
+fullscreen_prompt(const char *prompt, char *result, size_t resultLen) {
+    WINDOW *win = newwin(0, 0, 0, 0);   // Full-screen window
+    keypad(win, true);
+
+    const int top = 4;
+    const int editline_y = top + 2;
+    const int left = 4;
+
+    resultLen = min(resultLen, SCREEN_W - left * 2);
+
+    bool accepted = false;
+    bool redraw = true;
+    size_t end = strlen(result);        // index of trailing null
+    while(true) {
+        if (redraw) {
+            wclear(win);
+
+            wmove(win, top, left);
+            addfmt(win, prompt);
+
+            wmove(win, editline_y + 2, left);
+            addfmt(win, "|ENTER to accept, ESC to cancel|");
+
+            redraw = false;
+        }// if
+
+        wmove(win, editline_y, left);
+        waddch(win, '[');
+        waddstr(win, result);
+        for (int i = end; i < resultLen - 1; i++) {
+            waddch(win, '_');
+        }
+        waddch(win, ']');
+        wmove(win, editline_y, left + 1 + end);
+
+        curs_set(2);        // show cursor
+        int key = wgetch(win);
+        curs_set(0);        // hide it again
+
+        if (key == 12 || key == 18) { // ^R or ^L
+            redraw = true;
+            continue;
+        }
+
+        if (key == ESC)     { break; }
+        if (key == '\n')    {
+            accepted = true;
+            break;
+        }
+
+        if (key == KEY_BACKSPACE || key == KEY_DC || key == 127 || key == 8) {
+            if (end > 0) {
+                --end;
+                result[end] = 0;
+            }
+            continue;
+        }// if
+
+        if (!isprint(key))  { continue; }
+
+        if (end + 1 >= resultLen) { continue; }
+
+        result[end] = (char)key;
+        ++end;
+        result[end] = 0;
+    }// while
+
+
+    delwin(win);
+    sync_ui(true);
+
+    return accepted && end > 0;
+}// fullscreen_prompt
+
 
 
 // Let the user select a character class.
@@ -753,35 +917,47 @@ get_cclass(enum CHAR_CLASS *pcc) {
     pl_free(cclasses);
 
     *pcc = id;
-    
+
     return selected;
 }// get_cclass
 
 
 // Let the user select a gender.
 static bool
-get_gender(enum SEX *pgender) {
+get_gender(enum GENDER *pgender, bool spouse) {
     struct PickList *genders = pl_malloc();
 
-    pl_add(genders, FEMALE, 'f', "female");
-    pl_add(genders, MALE, 'm', "male");
-    
+    pl_add(genders, FEMALE,     'f', spouse ? "woman" : "female");
+    pl_add(genders, MALE,       'm', spouse ? "man" : "male");
+    pl_add(genders, NONBINARY,  'n', spouse ? "non-binary person":"non-binary");
+
     int id = 0;
-    bool selected = pick_item(genders, "So, what are ya?", &id);
+    const char *heading = spouse     ?
+        "And you're married to a..." :
+        "So, what are ya?";
+    bool selected = pick_item(genders, heading, &id);
     pl_free(genders);
 
     *pgender = id;
-    
+
     return selected;
 }// get_gender
 
 
 // Let the user select a character class and gender.
 bool
-get_player_type(enum CHAR_CLASS *pcc, enum SEX *pgender) {
+get_player_type(char *playername, size_t playername_len,
+                enum CHAR_CLASS *pcc, enum GENDER *pgender,
+                enum GENDER *sgender) {
+    const char *prompt = "Who are ya?";
+
+    if (!fullscreen_prompt(prompt, playername, playername_len)) {
+        return false;
+    }
 
     if (!get_cclass(pcc)) { return false; }
-    if (!get_gender(pgender)) { return false; }
+    if (!get_gender(pgender, false)) { return false; }
+    if (!get_gender(sgender, true)) { return false; }
 
     return true;
 }/* get_player_type*/
@@ -811,27 +987,35 @@ prompt(const char *question) {
     memset(seeking, 0, sizeof(seeking));
 
     /* Look for requested keystrokes. */
+    char lastkey = '\0';
     for (n = 0; question[n]; n++) {
         if (question[n] == '(' && question[n+1] && question[n+2] == ')') {
-            seeking[(int)(question[n+1])] = true;
+            lastkey = question[n+1];
+            seeking[(int)lastkey] = true;
         }/* if */
     }/* for */
 
     /* Wait for the user to select an item. */
+    int key;
+    say("%s ", question);
     for (;;) {
-        int key;
-
-        say("%s ", question);
-
         key = cursor_getch();
 
-        if (key == ESC) return '\0';
+        // Ignore invalid keycodes
         if (key < 0 || key > sizeof(seeking)/sizeof(bool)) continue;
-        if (seeking[key]) return key;
-        say("%c\n", isprint(key) ? key : ' ');
+
+        // We're done if this is one of the keys being sought
+        if (seeking[key]) { break; }
+
+        // And treat ESC as equivalent to the last key
+        if (key == ESC) {
+            key = lastkey;
+            break;
+        }
     }/* for */
 
-    return '\0';  /* not reached. */
+    say("%c\n", isprint(key) ? key : ' ');
+    return key;
 }/* prompt*/
 
 /* Prompt for confirmation and return true for yes and false for
@@ -1073,12 +1257,34 @@ billboard(bool center, const char *heading, ...) {
 // do this so that the cursor is in the right place when prompting.)
 static void
 update_msg() {
-    int n = 0;
+    static int last_update_line = 0;
 
+    debugCycleBackground(ConsoleWin);
+
+    // If we just need to append one line to the bottom of the buffer
+    // AND it's the start of a new line, we use the scroller and add
+    // just the line.  This is relatively low-hanging fruit when
+    // optimizing for network use.
+    if (tb_newline(ConsoleBuffer) &&
+        tb_total_lines(ConsoleBuffer) - last_update_line == 1) {
+        int ypos = tb_num_lines(ConsoleBuffer) - 1;
+
+        if (ypos >= CONSOLE_H) {
+            scroll(ConsoleWin);
+            ypos = CONSOLE_H - 1;
+        }
+
+        const char *line = tb_getlastn(ConsoleBuffer, 0, 1);
+        mvwaddnstr(ConsoleWin, ypos, 0, line, SCREEN_W);
+
+        goto done;
+    }// if
+
+    // Otherwise, redraw the entire window
     wclear(ConsoleWin);
 
     int lastx = 0, lasty = 0;
-    for (n = 0; n < CONSOLE_H; n++) {
+    for (int n = 0; n < CONSOLE_H; n++) {
         const char *line = tb_getlastn(ConsoleBuffer, n, CONSOLE_H);
         mvwaddnstr(ConsoleWin, n, 0, line, SCREEN_W);
         if (*line) {
@@ -1090,7 +1296,8 @@ update_msg() {
     // Move the cursor to the end of the last non-empty line.
     wmove(ConsoleWin, lasty, lastx);
 
-    wrefresh(ConsoleWin);
+done:
+    last_update_line = tb_total_lines(ConsoleBuffer);
 }/* update_msg*/
 
 
@@ -1109,39 +1316,67 @@ say(const char *fmt, ...) {
 }/* say*/
 
 
-
-static const char *
-indlabel(enum INDICATOR ind) {
-    switch (ind) {
-    case IND_STEALTH:       return "Stealth";
-    case IND_UNDEAD_PRO:    return "Undead Pro";
-    case IND_SPIRIT_PRO:    return "Spirit Pro";
-    case IND_CHARM:         return "Charm";
-    case IND_TIME_STOP:     return "Time Stop";
-    case IND_HOLD_MONST:    return "Hold Monst";
-    case IND_GIANT_STR:     return "Giant Str";
-    case IND_FIRE_RESIST:   return "Fire Resist";
-    case IND_DEXTERITY:     return "Dexterity";
-    case IND_STRENGTH:      return "Strength";
-    case IND_SCARE:         return "Scare";
-    case IND_HASTE_SELF:    return "Haste Self";
-    case IND_CANCEL:        return "Cancel";
-    case IND_INVISIBLE:     return "Invisible";
-    case IND_PROTECT_3:     return "Protect 3";
-    case IND_PROTECT_2:     return "Protect 2";
-    case IND_WALLWALK:      return "Wall-Walk";
-    default:                return "";
-    }/* switch */
-
-    return "";              /* Not reached. */
-}/* indLabel*/
-
-
+// Update the visible display of active effects (e.g. stealth).  If
+// 'force' is false, it may skip drawing some or all of the text that
+// is not present.
+//
+// (Currently, it skips redrawing if no effects have changed since the
+// last call.)
 void
-setindicator(enum INDICATOR ind, bool on) {
-    const char *str = on ? indlabel(ind) : "                      ";
-    mvwaddnstr(IndWin, (int)ind, 2, str, IndWidth - 2);
-}/* setindicator*/
+show_indicators(const struct Player *uu, bool force) {
+    static uint32_t last_update = (uint32_t)(-1);
+
+    struct {
+        bool show;
+        const char *label;
+    } indicators [] = {
+        {!!uu->stealth,         "Stealth"},
+        {!!uu->undeadpro,       "Undead Pro"},
+        {!!uu->spiritpro,       "Spirit Pro"},
+        {!!uu->charmcount,      "Charm"},
+        {!!uu->timestop,        "Time Stop"},
+        {!!uu->holdmonst,       "Hold Monst"},
+        {!!uu->giantstr,        "Giant Str"},
+        {!!uu->fireresistance,  "Fire Resist"},
+        {!!uu->dexCount,        "Dexterity"},
+        {!!uu->strcount,        "Strength"},
+        {!!uu->scaremonst,      "Scare"},
+        {!!uu->hasteSelf,       "Haste Self"},
+        {!!uu->cancellation,    "Cancel"},
+        {!!uu->invisibility,    "Invisible"},
+        {!!uu->altpro,          "Protect 3"},
+        {!!uu->protectionTime,  "Protect 2"},
+        {!!uu->wtw,             "Wall-Walk"},
+
+        // Note: must be less than 32 items so that the initial
+        // last_update will never equal the current this_update.
+        {!!false, NULL}
+    };
+
+    uint32_t this_update = 0;
+    for (int i = 0; indicators[i].label; i++) {
+        if (indicators[i].show) { this_update |= 1; }
+        this_update <<= 1;
+    }
+
+    bool status_changed = this_update != last_update;
+    last_update = this_update;
+
+    // If nothing changed (and it's not required), do nothing.
+    if (!force && !status_changed) { return; }
+
+    // Update the indicator display.
+    for (int i = 0; indicators[i].label; i++) {
+        const char *str =
+            indicators[i].show ? indicators[i].label
+                               : "                      ";
+        debugCycleBackground(IndWin);
+        mvwaddnstr(IndWin, i, 2, str, IndWidth - 2);
+    }/* for */
+}/* show_indicators*/
+
+
+
 
 
 /* routine to pause for n milliseconds */

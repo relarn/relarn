@@ -4,7 +4,7 @@ relarn - Explore the Caves of Larn
 
 =head1 SYNOPSIS
 
-relarn [ -i ] [ -s ] [ -n ] [ -h ] [ -v] [ -o filename ] [ -d num ]
+relarn [ -i ] [ -s ] [ -n ] [ -h ] [ -v] [ -b] [ -o filename ] [ -d num ]
 
 =head1 DESCRIPTION
 
@@ -78,6 +78,12 @@ default config file and can override it.
 
 Specifies the difficulty level when starting a new game.
 
+=item -b
+
+Enables display debugging.  Currently, this means randomizing the
+background color when drawing the display, but that could change next
+release.  B<DON'T USE THIS!>
+
 =item -h, -v
 
 Print argument help or the version number and exit.
@@ -110,7 +116,7 @@ usually done by a wrapper script.
 
 =head1 AUTHOR, COPYRIGHT, LICENSING
 
-ReLarn is Copyright (C) 1986-2018 The Authors and is Free Software
+ReLarn is Copyright (C) 1986-2019 The Authors and is Free Software
 under the terms of the GNU General Public License version 2.0.  There
 is NO WARRANTY, to the extent permitted by law.
 

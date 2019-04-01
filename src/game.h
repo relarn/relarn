@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // Module implementing the main game loop.
@@ -11,13 +11,15 @@
 
 /* Death codes to pass to die. */
 enum GAME_ENDING {
-    DD_DUMMY = NUM_MONSTERS + 1,   // Ensure count doesn't overlap a creature
+    DD_DUMMY = LAST_MONSTER + 1,   // Ensure count doesn't overlap a creature
 
 #define ENDING(id, name) id,
 #   include "game_endings.h"
 #undef ENDING
 };
 
+// This holds more of the game state and gets stored in the save file.
+// Arguably, this should be merged into struct Player.
 struct GameState {
     unsigned monstCount;    // Countdown 'til next random monster creation
     bool wizardMode;        // Enables certain debug features.
@@ -27,10 +29,9 @@ struct GameState {
 extern struct GameState GS;
 
 
-bool onemove(DIRECTION dir, bool noMonMove);
+bool onemove(DIRECTION dir);
 void mainloop(void);
 void makeplayer();
-void cancelLook(void);
 void cancelMonMove(void);
 void graceful_exit(const char *msg);
 long compute_score(bool won);

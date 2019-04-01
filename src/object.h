@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // Code for creating and managing in-game objects (i.e. weapons,
@@ -10,16 +10,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* 
-   The type used to represent objects on the map and in inventory. 
+/*
+   The type used to represent objects on the map and in inventory.
 */
 #define MAX_IARG ((int)((1u << 23) - 1))
 struct Object {
     uint8_t type;              /* Index of type in Types[]. */
     int iarg:24;
 };
-
-extern const struct Object NullObj;
 
 
 /*
@@ -41,7 +39,7 @@ enum OBJECT_ATTR {
     OA_EDIBLE       = 0x100,    /* Can be eaten? Only true for cookies. */
     OA_CHARM        = 0x200,    /* Intended to be carried. */
     OA_BANKBUYS     = 0x400,    /* Can be sold to the bank. */
-    OA_DRUG       = 0x800,    /* Sold exclusively by Dealer McDope. */
+    OA_DRUG         = 0x800,    /* Sold exclusively by Dealer McDope. */
 };
 
 /* The list of object IDs. */
@@ -49,9 +47,9 @@ enum OBJECT_ID {
 #define OBJECT(id, sym, price, qty, rust, weight, mod, flags, pdesc, desc) id,
 #   include "object_list.h"
 #undef OBJECT
-    OBJ_COUNT,    
+    OBJ_COUNT,
+    OBJ_CONCRETE_COUNT = OUNSEEN,
 };
-#define MAX_OBJ (OBJ_COUNT - 1)
 
 /* Keep these synched with object_list.h */
 #define POTION_FIRST OPSLEEP
@@ -61,6 +59,16 @@ enum OBJECT_ID {
 #define SCROLL_FIRST OSENCHANTARM
 #define SCROLL_LAST OSLIFEPROT
 #define NUM_SCROLLS (SCROLL_LAST - SCROLL_FIRST)
+
+// The null object; used to indicate nothing is in this cell (well,
+// except for the floor).
+#define NULL_OBJ ((struct Object) {ONONE, 0})
+
+// Sentinal value to be used ONLY in MapSquare.recalled to indicate
+// that the current location has not been explored.  I.e. more null
+// object than NULL_OBJ.
+#define UNSEEN_OBJ ((struct Object){OUNSEEN, 0})
+
 
 enum DOOR_TRAP {
     DT_NONE,            /* No trap. */
@@ -86,7 +94,7 @@ struct ObjType {
     int weight;
     int mod;
     unsigned long flags;
-    bool isKnown; 
+    bool isKnown;
 };
 extern struct ObjType Types[];
 
@@ -112,8 +120,8 @@ bool iswieldable(struct Object obj);
 bool iswearable(struct Object obj);
 bool isnone(struct Object obj);
 bool isshiny(struct Object obj);
+bool isopaque(struct Object obj);
 
-bool lookforobject(void);
 void quaffpotion(struct Object pot);
 void read_scroll(struct Object scr);
 void removecurse(void);
@@ -121,7 +129,6 @@ void readbook(int arg);
 void iopts(void);
 void ignore(void);
 void closedoor(void);
-void udelobj(void);
 struct Object newobject(int lev);
 void show_cookie(void);
 

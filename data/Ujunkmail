@@ -78,7 +78,7 @@ Subject: a noble deed
 
 I have heard of your magnificent feat and I, King Wilfred, hereby
 declare this day to be a national holiday.  Furthermore, three days
-hence, ye be invited to the castle to receive the honour of ${lady} of
+hence, ye be invited to the castle to receive the honour of Knight of
 the Realm.  Upon thy name shall it be written...
 
 Bravery and courage be yours.
@@ -162,7 +162,7 @@ From: test@lol.com.ln (Reverend Doctor Judge Pontius Ben)
 To: ${player_email}
 Subject: Business Opportunity
 
-Dear Mr ${player_email},
+Dear Mr Sir Highness ${player_email},
 
 Allow me to introduce myself.  I am an attorney representing the sole
 heir of the recently deceased God of Hellfire.

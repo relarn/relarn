@@ -1,10 +1,99 @@
-# Changes from Ularn 1.5ish
+# Change Log
+
+Note that spoilery changes are listed in a following section if you
+wish to avoid them.
+
+## Changes in 2.1
+
+Broke savefile compatibility with 2.0.
+
+Changed the semantics of vision and field-of-view:
+* The previous version would (sometimes) display everything (including
+  monsters) in any location that had previously been revealed.  Now,
+  monsters are only visible within the field of view and everything else
+  is just the map you made when you last saw it.
+* The field of view is now computed based on line-of-sight (via Greg
+  McIntyre's libfov) rather than just revealing the rectangle around the
+  player; it is no longer possible to see through walls, for example.
+
+The field of view is now (optionally) highlighted on terminals that
+support colour.
+
+Unexplored cells now look different from empty cells on colour TTYs.
+
+The module `display.[ch]` now is the sole owner of field-of-view.
+
+Added the `-b` debugging flag; don't use it.
+
+Is now somewhat more efficient with bandwidth between program and
+terminal.  (This may not actually be noticable to anyone not using an
+acoustic modem but there's a small chance that it'll reduce someone's
+network charges.)
+
+You may now select your spouse's gender.
+
+You may now select "non-binary" as a gender for yourself and/or your
+spouse.
+
+The menu options you get when stepping on an object now use (mostly)
+the same keys in a consistent manner.
+
+Standing on an object no longer pops up the associated menu for each
+new turn.  Now, you only get the menu when you walk on it or if you
+explicitly look (',').
+
+Now more aggressive in finding a free spot when dropping items after
+Create Artifact, Thrones, monster kills, etc.  The game used to give
+up if there wasn't a free adjacent place; now, it looks farther away
+and virtually guarantees the object will be placed on the map.
+
+
+### Spoilery Changes
+
+Enlightenment et. al. now work by increasing the visual radius and
+letting you see through walls for a small number of turns.  This
+changes the semantics a little.
+
+Similarly, Potions of Monster Detection now make all monsters visible
+for a few turns but do not reveal the map locations they occupy.
+
+You can no longer identify walls or floor while blind if you can walk
+through them.
+
+Praying at an altar can now (very, very rarely) teleport you back to
+the town with the Potion of Cure Dianthroritis, effectively winning
+the game.  (True fact: this could actually happen in 2.00 as the
+result of a bug.)
+
+Haste-self now decreases the passage of time by half.  (It used to
+stop the counter completely; this meant that permanent haste-self
+effectively ended the time limit.)
+
+Loading a saved game no longer gives you a free regeneration turn.
+(This was probably a bug, anyway.)
+
+Using an object may now consume a turn if you don't do so when walking
+on it.  This is because the action menu gets suppressed if you haven't
+moved and bringing it up requires an explicit look (via ','), which
+consumes a turn.
+
+Made lemmings much easier to kill (and therefore less annoying) by
+increasing their AC.  (Recall that lower AC is better.)
+
+The spell "Time Stop" was not stopping the turn counter from
+advancing.
+
+It is no longer possible to walk through a closed door when "Time
+Stop" is in effect.
+
+
+## Changes in 2.00 (i.e. from Ularn 1.5ish)
 
 Here is a (hopefully) complete list of notable differences between
 ReLarn and Ularn 1.5ish from which it was forked.
 
 
-## Maintainability Fixes
+### Maintainability Fixes
 
 The source code has been organized into thematically-related modules
 consisting of two files, a source (`.c`) file and a matching header
@@ -130,7 +219,7 @@ player's win.
 
 
 
-## Gameplay Changes
+### Gameplay Changes
 
 **Note that these could be considered spoilers, so you may want to skip
 this section if that's a problem for you.**
@@ -165,3 +254,5 @@ exceptions).  I also added two more possibilities.
 
 Changed format of end-of-game (i.e you win or die) message.
 
+Enlightenment (scroll and spell) now might last for a small number of
+turns.

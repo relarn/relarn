@@ -1,9 +1,9 @@
 
-#   Import build configuration
-include config.mk
-
 #	Import release version numbers
 include version.mk
+
+#   Import build configuration
+include config.mk
 
 #   Build details, part of the extended version info
 DATE := $(shell date +'(%Y-%m-%d)')
@@ -14,7 +14,7 @@ PLATFORM := $(shell uname -psr)
 PROGRAM	= relarn$(EXT)
 
 # 	for console UI
-SYS_LIBRARIES=	-lcurses 
+SYS_LIBRARIES=	-lcurses -lm
 
 #   link flags
 LDFLAGS= -g -Wall
@@ -35,7 +35,7 @@ SRCS1 = action.c bank.c bill.c cast.c create.c debug.c diag.c	\
 display.c fortune.c game.c player.c help.c look.c		\
 main.c monster.c movem.c object.c os.c map.c score_file.c show.c	\
 sphere.c store.c settings.c ui.c textbuffer.c lrs.c \
-picklist.c util.c school.c stringbuilder.c text_template.c
+picklist.c util.c school.c stringbuilder.c text_template.c fov/fov.c
 
 #   the object files
 OBJS1	= $(SRCS1:.c=.o)
@@ -54,8 +54,11 @@ $(PROGRAM): $(OBJS1)
 	mv $@.tmp $@
 
 .c.o:
-	$(CC) -c $(CFLAGS) $(DEFINES) $<
+	$(CC) -c $(CFLAGS) $(DEFINES) $< -o $@
 
+# fov is a special case because of the directory
+#fov/fov.o : fov.o
+#	mv fov.o fov/fov.o
 
 install: $(PROGRAM)
 	./install_relarn.sh "$(INST_ROOT)" $(EXT) $(SH_EXT)

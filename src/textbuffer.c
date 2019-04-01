@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -25,6 +25,7 @@ tb_malloc(int length, int linewidth) {
 
     result->text = NULL;
     result->num_lines = 0;
+    result->total_lines = 0;
     result->newline = true;
     result->max_lines = length;
     result->max_width = linewidth;
@@ -247,6 +248,8 @@ appendSegment (struct TextBuffer *tb, char *line) {
     ++tb->num_lines;
     tb->text = xrealloc(tb->text, tb->num_lines * sizeof(char **));
 
+    ++tb->total_lines;
+
     tb->text[tb->num_lines - 1] = linecopy;
 }/* appendSegment */
 
@@ -259,6 +262,7 @@ dropLast(struct TextBuffer *tb) {
 
     last = tb->text[tb->num_lines - 1];
     --tb->num_lines;
+    --tb->total_lines;
 
     /* We don't resize tb->text here; appendSegment can do that. */
 
@@ -289,7 +293,7 @@ scrollBuffer (struct TextBuffer *tb) {
     /* Adjust num_lines and null-terminate tb->text */
     tb->num_lines -= scrollAmt;
     tb->text[tb->num_lines] = NULL;
-}/* truncateBuffer */
+}// scrollBuffer 
 
 // Reposition all lines so that they're centered.
 void

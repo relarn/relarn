@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // This module contains code and data structures to manage the
@@ -9,7 +9,7 @@
 
 #include "constants.h"
 #include "monster.h"
-
+#include "internal_assert.h"
 
 #define MAX_STOLEN  32
 
@@ -30,7 +30,7 @@
 struct MapSquare {
     struct Monster mon;
     struct Object obj;
-    int know        :1;
+    struct Object recalled;
 };
 
 struct Level {
@@ -49,16 +49,36 @@ void setlevel(int);
 bool savegame_to_file(FILE *fh);
 bool restore_from_file(FILE *fh, bool *wrongFileVersion);
 void init_cells(void);
-void enlighten(int xrange, int yrange);
 void add_to_stolen(struct Object thing, struct Level *lev);
 struct Object remove_stolen(struct Level *lev);
 bool findobj(uint8_t type, int *x, int *y);
 void remake_map_keeping_contents(void);
-void createitem(int x, int y, int it, int arg);
-void something(int x, int y, int lev);
+void createitem(int x, int y, struct Object item);
+void create_rnd_item(int x, int y, int lev);
+void creategem(void);
 bool cgood(int x, int y, bool itm, bool monst);
+void set_reveal(bool see);
+void udelobj(void);
+
+static inline void see_at(int x, int y) {
+    ASSERT(x < MAXX && y < MAXY && 0 <= x && 0 <= y);
+    Map[x][y].recalled = Map[x][y].obj;
+}// see_at
+
+static inline void forget_at(int x, int y) {
+    ASSERT(x < MAXX && y < MAXY && 0 <= x && 0 <= y);
+    Map[x][y].recalled = UNSEEN_OBJ;
+}// forget_at
+
+static inline bool known(struct MapSquare here) {
+    return here.recalled.type != UNSEEN_OBJ.type;
+}// known
 
 
+static inline bool known_at(int x, int y) {
+    ASSERT(x < MAXX && y < MAXY && 0 <= x && 0 <= y);
+    return known(Map[x][y]);
+}// known_at
 
 // Restrict x,y to the bounds of the map
 #define VXY(x,y)                                \

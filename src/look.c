@@ -1,5 +1,7 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
+
+
 
 #include "look.h"
 
@@ -50,6 +52,34 @@ static void take_stairs(int);
 static void ocaveexit(void);
 
 
+// The last square looked at; we use this to keep the "you see a..."
+// prompt from coming up if you've already seen it.
+static int prevlook_x = -1, prevlook_y = -1, prevlook_lvl = -1;
+
+// Test if we've already seen this location
+static bool
+skip_looking() {
+    return prevlook_x == UU.x &&
+        prevlook_y == UU.y &&
+        prevlook_lvl == getlevel();
+}// skip_looking
+
+// Mark the current location as unseen so that the next call to
+// lookforobject() will search again.
+void
+force_look () {
+    prevlook_x = prevlook_y = prevlook_lvl = -1;
+}// clear_looked_here
+
+// Mark the current location as seen.
+void
+cancel_look() {
+    prevlook_x = UU.x;
+    prevlook_y = UU.y;
+    prevlook_lvl = getlevel();
+}// cancel_look
+
+
 /* Look for an object and give the player options if an object was
  * found. Returns true if an object was found, false if not.  */
 bool
@@ -57,13 +87,23 @@ lookforobject() {
     int i;
     struct Object thing;
 
+    // Skip looking if we've already seen it.
+    {
+        bool looked_already = skip_looking();
+        cancel_look();
+        if (looked_already) { return false; }
+    }
+
     /* can't find objects is time is stopped*/
-    if (UU.timestop) return false;
+    if (UU.timestop) { return false; }
 
     thing = Map[UU.x][UU.y].obj;
-    if (isnone(thing)) return false;
+    if (isnone(thing) || thing.type == OWALL) { return false; }
 
-    showplayerarea();
+    // The player has moved and the game may prompt, so we need to
+    // update to display that.
+    see_and_update_fov();
+    update_display();
 
     if (ispotion(thing)) {
         opotion();
@@ -77,48 +117,48 @@ lookforobject() {
 
     i = thing.type;
     switch(i) {
-    case OGOLDPILE: 
+    case OGOLDPILE:
         ogold();
         break;
 
-    case OALTAR:    
-        oaltar(); 
+    case OALTAR:
+        oaltar();
         break;
 
-    case OBOOK: 
-        obook(); 
+    case OBOOK:
+        obook();
         break;
 
-    case OCOOKIE:   
-        ocookie(); 
+    case OCOOKIE:
+        ocookie();
         break;
 
-    case OTHRONE:   
-    case OTHRONE2:  
-    case ODEADTHRONE: 
-        othrone(); 
+    case OTHRONE:
+    case OTHRONE2:
+    case ODEADTHRONE:
+        othrone();
         break;
 
-    case OBRASSLAMP: 
+    case OBRASSLAMP:
         olamp();
         break;
 
-    case OPIT:  
-        opit(); 
+    case OPIT:
+        opit();
         break;
 
-    case OSTAIRSUP: 
+    case OSTAIRSUP:
     case OSTAIRSDOWN:
         ostairs();
         break;
 
     case OELEVATORUP:
-    case OELEVATORDOWN: 
+    case OELEVATORDOWN:
         oelevator();
         break;
 
-    case OFOUNTAIN: 
-        ofountain(); 
+    case OFOUNTAIN:
+        ofountain();
         break;
 
     case OMIRROR:
@@ -128,23 +168,23 @@ lookforobject() {
         osimple();
         break;
 
-    case OCHEST:    
-        ochest();  
+    case OCHEST:
+        ochest();
         break;
 
-    case OIVTELETRAP:  
+    case OIVTELETRAP:
     case OTELEPORTER:
         oteleport_trap();
-        break; 
+        break;
 
     case OSCHOOL:
     case OBANK2:
     case OBANK:
     case OTRADEPOST:
-    case OHOME: 
-    case OPAD:  
-    case ODNDSTORE: 
-    case OLRS:  
+    case OHOME:
+    case OPAD:
+    case ODNDSTORE:
+    case OLRS:
         oshop();
         break;
 
@@ -152,11 +192,11 @@ lookforobject() {
         ocloseddoor();
         break;
 
-    case OENTRANCE: 
+    case OENTRANCE:
         oentrance();
         break;
 
-    case OEXIT: 
+    case OEXIT:
         ocaveexit();
         break;
 
@@ -168,10 +208,10 @@ lookforobject() {
         ovolup();
         break;
 
-    case OTRAPARROWIV:  
+    case OTRAPARROWIV:
     case OTRAPARROW:
-    case OIVDARTRAP:    
-    case ODARTRAP:      
+    case OIVDARTRAP:
+    case ODARTRAP:
         opointytraps();
         break;
 
@@ -180,38 +220,32 @@ lookforobject() {
         otrapdoor();
         break;
 
-    case OSPEED:    
+    case OSPEED:
         ospeed();
         break;
 
-    case OSHROOMS:  
+    case OSHROOMS:
         oshrooms();
         break;
 
-    case OACID: 
+    case OACID:
         oacid();
         break;
 
-    case OHASH: 
+    case OHASH:
         ohash();
         break;
 
-    case OCOKE: 
+    case OCOKE:
         ocoke();
-        break;  
-
-    case OWALL: 
         break;
 
     case OANNIHILATION:
         oannihilation();
         break;
 
-    case OWWAND:
-    case OHANDofFEAR:
-    case OORB:  
-    default:    
-        finditem(); 
+    default:
+        finditem();
         break;
     }/* switch*/
 
@@ -219,7 +253,38 @@ lookforobject() {
 }/* lookforobject*/
 
 
+/*
 
+  Common Prompt Keys:
+
+  Many in-game objects trigger a prompt for an option via the
+  'prompt()' function.  For example, walking on a stairway will
+  present the player with the option of taking the stairs to a
+  different level.
+
+  For usability, we try to restrict this to the same small set of
+  keys:
+
+    g - go (enter/climb up or down),
+        consume (quaff/smoke/snort/eat/read), or
+        activate (open/rub).
+    t - take into inventory
+    n - ignore it and do nothing.  (Always last, so it's the
+        result of ESCAPE.)
+
+  The dangerous option should usually be bound to 'g' with the others
+  being safe.  (Altars are an exception, but that's a spoiler.)
+
+  For altars, fountains and thrones, it's two levels of prompting:
+
+    (g) get a closer look or (n) do nothing?
+
+  followed by the original options if the player selects 'g'.
+
+ */
+
+
+// Handle the trap door.
 static void
 otrapdoor() {
     bool invisible;
@@ -229,7 +294,7 @@ otrapdoor() {
     if (invisible) {
         if (rnd(17) < 13) return;
         Map[UU.x][UU.y].obj = obj(OTRAPDOOR, 0);
-        Map[UU.x][UU.y].know = 1;
+        see_at(UU.x, UU.y);
     }/* if */
 
     if (has_a(OWWAND)) {
@@ -241,17 +306,17 @@ otrapdoor() {
         say("You fall through a trap door leading straight to HELL!\n");
         headsup();
         nap(3000);
-        game_over_probably(DDTRAPDOORHELL); 
+        game_over_probably(DDTRAPDOORHELL);
         return; /* Not reached. */
     }/* if */
 
     say("You fall through a trap door!\n");
-    headsup(); 
+    headsup();
     losehp(rnd(5+getlevel()), DDTRAPDOOR);
     nap(2000);
-    setlevel(getlevel()+1);  
+    setlevel(getlevel()+1);
 
-    update_display(true);
+    update_display();
 }/* otrapdoor*/
 
 
@@ -272,11 +337,10 @@ opointytraps() {
     if (invisible) {
         if (rnd(17) < 13) return;
         Map[UU.x][UU.y].obj = obj(isDart ? ODARTRAP : OTRAPARROW, 0);
-        Map[UU.x][UU.y].know = 0;
     }/* if */
 
     say("You are hit by %s %s!\n", an(arrow), arrow);
-    headsup(); /* grrrr */
+    headsup();
 
     if (isDart) {
         losehp(rnd(5), DDDART);
@@ -293,32 +357,33 @@ ovoldown() {
     char opt;
 
     say("You have found %s\n", Types[OVOLDOWN].desc);
-    opt = prompt ("Do you (c) climb down, or (i) ignore it? "); 
-    if (opt != 'c') { 
-        ignore();  
+    opt = prompt("Do you (g) go climbing down, or (n) do nothing? ");
+    if (opt != 'g') {
+        ignore();
         return;
     }/* if */
 
-    if (getlevel() != 0) { 
-        say("The shaft only extends 5 feet downward!\n"); 
+    if (getlevel() != 0) {
+        // This is probably not possible in the normal game, but...
+        say("The shaft only extends 5 feet downward!\n");
         return;
     }/* if */
 
-    if (packweight() > 45+3*(UU.strength+UU.strextra)) { 
+    if (packweight() > 45+3*(UU.strength+UU.strextra)) {
         say("You slip and fall down the shaft.\n");
         headsup();
-        losehp(30+rnd(20), DDSHAFT); 
+        losehp(30+rnd(20), DDSHAFT);
     } else {
         say("climb down.");
     }/* if .. else*/
 
-    nap(3000); 
+    nap(3000);
     setlevel(VTOP); /* down to V1 */
     UU.x = rnd(MAXX-2);
     UU.y = rnd(MAXY-2);
-    positionplayer(); 
+    positionplayer();
 
-    update_display(true);
+    update_display();
 }/* ovoldown*/
 
 
@@ -328,27 +393,27 @@ ovolup() {
 
     say("You have found %s\n", Types[OVOLUP].desc);
 
-    opt = prompt("Do you (c) climb up, or (i) ignore it?"); 
-    if (opt != 'c') {
+    opt = prompt("Do you (g) go climbing up, or (n) do nothing?");
+    if (opt != 'g') {
         ignore();
         return;
     }/* if */
 
-    if (packweight() > 40+5*(UU.dexterity+UU.strength+UU.strextra)) { 
+    if (packweight() > 40+5*(UU.dexterity+UU.strength+UU.strextra)) {
         say("You slip and fall down the shaft.\n");
         headsup();
-        losehp(15+rnd(20), DDSHAFT); 
+        losehp(15+rnd(20), DDSHAFT);
         return;
     }/* if */
 
     say("climb up.\n");
 
-    nap(3000); 
+    nap(3000);
     setlevel(0);
 
     findobj(OVOLDOWN, &UU.x, &UU.y);
 
-    update_display(true);
+    update_display();
 }/* ovolup*/
 
 
@@ -357,18 +422,18 @@ oentrance() {
     char opt;
 
     say("You have found %s\n", Types[OENTRANCE].desc);
-    opt = prompt("Do you (g) go inside, or (i) ignore it? ");
+    opt = prompt("Do you (g) go inside, or (n) do nothing? ");
     if (opt != 'g') {
-        say("ignore.\n");    
+        say("ignore.\n");
         return;
     }/* if */
 
     /* Move the player to level 1, creating it if necessary. */
-    setlevel(1); 
+    setlevel(1);
     findobj(OEXIT, &UU.x, &UU.y);
 
     /* Update the display. */
-    update_display(true); 
+    update_display();
 }/* oentrance*/
 
 
@@ -377,17 +442,15 @@ ocaveexit() {
     char opt;
 
     say("You have found %s\n", Types[OEXIT].desc);
-    opt = prompt("Do you (g) get out of here or (i) ignore it? ");
+    opt = prompt("Do you (g) get out of here or (n) do nothing? ");
     if (opt != 'g') {
-        say("ignore.\n");    
+        ignore();
         return;
     }/* if */
-    
-    // TODO: look into using take_stairs() for this
 
     setlevel(0);
     findobj(OENTRANCE, &UU.x, &UU.y);
-    update_display(true);
+    update_display();
 }/* ocaveexit*/
 
 static void
@@ -397,10 +460,12 @@ ocloseddoor() {
 
     say("You find %s. ", objname(thing));
 
-    opt = prompt("Do you (o) try to open it, or (i) ignore it? ");
-    if (opt == 'i' || opt == 0) { 
-        say("ignore.\n");    
+    opt = prompt("Do you (g) try to get it open, or (n) do nothing? ");
+    if (opt == 'n') {
+        ignore();
+
         moveplayer_back();
+        cancel_look();
         return;
     }/* if */
 
@@ -408,33 +473,34 @@ ocloseddoor() {
      * a nasty surprise.  */
     say("open.\n");
 
-    if (rnd(11)<7) {    // XXX invert this to remove the 'if'.
-
+    if (rnd(11) < 7) {
         switch(thing.iarg) {
         case DT_AGGRAVATE:
             say("The door handle squeaks loudly.\n");
-            UU.aggravate += rnd(400);   
+            UU.aggravate += rnd(400);
             break;
-            
+
         case DT_SHOCK:
             say("You are jolted by an electric shock!\n");
-            losehp(rnd(20), DDSHOCK);  
+            losehp(rnd(20), DDSHOCK);
             break;
-            
-        case DT_WEAKEN: 
+
+        case DT_WEAKEN:
             say("You suddenly feel weaker!\n");
             if (UU.strength>3) UU.strength--;
             break;
-            
+
         default:
             say("The door is stuck.\n");
             break;
         }
+
         moveplayer_back();
+        cancel_look();
         return;
     }/* if */
 
-    udelobj();  
+    udelobj();
     Map[UU.x][UU.y].obj = obj(OOPENDOOR, 0);
 }/* ocloseddoor*/
 
@@ -444,9 +510,9 @@ ospeed() {
     char opt;
 
     say("You find some speed.\n");
-    opt = prompt("Do you (s) snort it, (t) take it, or (i) ignore it? ");
+    opt = prompt("Do you (g) snort it, (t) take it, or (n) do nothing? ");
 
-    if (opt == 's') {
+    if (opt == 'g') {
         say("snort!\nOhwowmanlikethingstotallyseemtoslowdown!\n");
 
         UU.hasteSelf += 200 + UU.level;
@@ -463,7 +529,7 @@ ospeed() {
         say("take.\n");
         pickup();
     } else {
-        say("ignore.\n");
+        ignore();
     }/* if .. else*/
 }/* ospeed*/
 
@@ -473,9 +539,9 @@ ohash() {
     char opt;
 
     say("You find some hashish.\n");
-    opt = prompt("Do you (s) smoke it, (t) take it, or (i) ignore it? ");
+    opt = prompt("Do you (g) smoke it, (t) take it, or (n) do nothing? ");
 
-    if (opt == 's') {
+    if (opt == 'g') {
         say("smoke!\nWOW! You feel stooooooned...\n");
         UU.hastemonst += rnd(75)+25;
         UU.intelligence += 2;
@@ -489,7 +555,7 @@ ohash() {
         say("take.\n");
         pickup();
     } else {
-        say("ignore.\n");
+        ignore();
     }/* if .. else*/
 }/* ohash*/
 
@@ -499,9 +565,9 @@ oacid() {
     char opt;
 
     say("You find some LSD.\n");
-    opt = prompt("Do you (e) eat it, (t) take it, or (i) ignore it? ");
+    opt = prompt("Do you (g) eat it, (t) take it, or (n) do nothing? ");
 
-    if (opt == 'e') {
+    if (opt == 'g') {
         int j,k;
 
         say("eat!\n");
@@ -539,15 +605,15 @@ oshrooms() {
     char opt;
 
     say("You find some magic mushrooms.\n");
-    opt = prompt("Do you (e) eat them, (t) take them, or (i) ignore them? ");
+    opt = prompt("Do you (g) eat them, (t) take them, or (n) ignore them? ");
 
-    if (opt == 'e') {
+    if (opt == 'g') {
         say("eat!\n");
         say("Things start to get real spacey...\n");
-        UU.hastemonst += rnd(75) + 25;
-        UU.confuse += 30+rnd(10);
-        UU.wisdom+=2;
-        UU.charisma+=2;
+        UU.hastemonst   += rnd(75) + 25;
+        UU.confuse      += 30+rnd(10);
+        UU.wisdom       += 2;
+        UU.charisma     += 2;
         udelobj();
     } else if (opt == 't') {
         say("take.\n");
@@ -565,9 +631,9 @@ ocoke() {
     char opt;
 
     say("You find some cocaine.\n");
-    opt = prompt("Do you want to (s) snort it, (t) take it, or (i) ignore it? ");
+    opt = prompt("Do you want to (g) snort it, (t) take it, or (n) do nothing? ");
 
-    if (opt == 's') {
+    if (opt == 'g') {
         say("snort!\n");
         say("Your nose begins to bleed!\n");
         if ((UU.dexterity -= 2) < 3)     UU.dexterity=3;
@@ -580,7 +646,7 @@ ocoke() {
         say("take.\n");
         pickup();
     } else {
-        say("ignore.\n");
+        ignore();
     }/* if .. else*/
 }/* ocoke*/
 
@@ -593,20 +659,20 @@ oshop() {
     char opt;
     bool isPad = thing.type == OPAD;
     bool isHome = thing.type == OHOME;
-    char *stay = isPad ? "check it out" : "go inside";
-    char *go =   isPad ? "forget it." : "stay here.";
+    char *go = isPad ? "check it out" : "go inside";
+    char *stay =   isPad ? "forget it." : "stay here.";
 
     /* Do nothing if the player is in combat.*/
     if (nearbymonst()) return;
 
     /* Ask the player if he/she wants to enter.  If not, quit. */
     snprintf(promptText, sizeof(promptText),
-             "You have found %s.\nDo you (g) %s, or (i) stay here? ",
+             "You have found %s.\nDo you (g) %s, or (n) stay here? ",
              isHome ? "your way home" : Types[thing.type].desc,
-             stay);
+             go);
     opt = prompt(promptText);
-    if (opt == 'i' || opt == 0) {
-        say("%s \n", go);
+    if (opt == 'n') {
+        say("%s \n", stay);
         return;
     }/* if */
 
@@ -641,17 +707,17 @@ osimple() {
 
     /* Yes, this repeats code in the caller. */
     thing = Map[UU.x][UU.y].obj;
-    
+
     switch (thing.type) {
-    case OSTATUE:   
+    case OSTATUE:
         msg = "You stand before a statue.";
         break;
 
     case OMIRROR:
         msg ="There is a mirror here.";
-        break;     
-        
-    case ODEADFOUNTAIN: 
+        break;
+
+    case ODEADFOUNTAIN:
         msg = "There is a dead fountain here.";
         break;
 
@@ -672,26 +738,26 @@ oteleport_trap() {
     struct Object *atThing;
 
     atThing = &Map[UU.x][UU.y].obj;
-    
+
     /* If it's a hidden (unknown) trap, first reveal it (unless the
      * player hasn't set it off. */
     if (atThing->type == OIVTELETRAP) {
         if (rnd(11)<6) return;  /* If it wasn't set off... */
         Map[UU.x][UU.y].obj.type = OTELEPORTER;
-        Map[UU.x][UU.y].know = true;
+        see_at(UU.x, UU.y);
     }/* if */
 
     say("Zaaaappp!  You've been teleported!\n");
-    headsup(); 
-    nap(3000); 
-    teleport(0);
+    headsup();
+    nap(3000);
+    teleport(false, -1);
 }/* oteleport_trap*/
 
 
 /*
   function to say what object we found and ask if player wants to take it
 */
-static void 
+static void
 finditem() {
     int i;
     struct Object itm;
@@ -707,11 +773,11 @@ finditem() {
 
     say("You find %s%s.\n", objname(itm), attrib);
 
-    i = prompt("Do you want to (t) take it, or (i) ignore it?"); 
-    if (i == 't') { 
+    i = prompt("Do you want to (t) take it, or (n) do nothing?");
+    if (i == 't') {
         say("take.\n");
         pickup();
-        return; 
+        return;
     }
 
     ignore();
@@ -740,7 +806,7 @@ take_stairs(int distance) {
     findobj(entryType, &UU.x, &UU.y);
 
     /* Update the display. */
-    update_display(true);
+    update_display();
 }/* take_stairs*/
 
 
@@ -748,32 +814,24 @@ take_stairs(int distance) {
 static void
 ostairs() {
     struct Object obj = Map[UU.x][UU.y].obj;
-    const char *what;
 
     ASSERT(obj.type == OSTAIRSUP || obj.type == OSTAIRSDOWN);
+    bool up = obj.type == OSTAIRSUP;
 
-    say("There is a circular staircase here.\n"); 
+    say("There is a circular staircase here.\n");
 
-    what = (obj.type == OSTAIRSUP) ?
-        "Do you (i) ignore it or (u) go up?"  :
-        "Do you (i) ignore it or (d) go down?";
+    char what[80];
+    snprintf(what, sizeof(what), "Do you (g) go %s or (n) do nothing?",
+             up ? "up" : "down");
 
     switch(prompt(what)) {
-    case 0:
-    case 'i':   
-        say("stay here.\n");   
+    case 'n':
+        say("stay here.\n");
         break;
 
-    case 'u':
-        say("go up.\n");
-        ASSERT(obj.type == OSTAIRSUP);
-        take_stairs(-1);
-        break;
-
-    case 'd':   
-        say("go down.\n");
-        ASSERT(obj.type == OSTAIRSDOWN);
-        take_stairs(1);
+    case 'g':
+        say("go %s.\n", up ? "up" : "down");
+        take_stairs(up ? -1 : 1);
         break;
     }/* switch*/
 }/* ostairs*/
@@ -808,9 +866,11 @@ olamp() {
     /* Query the user for actions.  If (s)he doesn't rub the lamp, we
      * return. */
     say("You find a brass lamp.\n");
-    
-    key = prompt("Do you want to (r) rub it, (t) take it, or (i) ignore it?");
-    if (key == 'i' || key == 0) return;
+
+    key = prompt("Do you want to (g) rub it, (t) take it, or (n) do nothing?");
+
+    if (key == 'n') { return; }
+
     if (key == 't') {
         say("take.\n");
         pickup();
@@ -848,19 +908,18 @@ olamp() {
 void
 ocookie() {
     say("\nYou find a fortune cookie.\n");
-    switch(prompt("Do you (e) eat it, (t) take it, or (i) ignore it? ")) {
-    case 0:
-    case 'i':   
-        ignore();   
+    switch(prompt("Do you (g) eat it, (t) take it, or (n) do nothing? ")) {
+    case 'n':
+        ignore();
         return;
 
-    case 'e':   
+    case 'g':
         say("eat.\n");
         show_cookie();
         udelobj(); /* no more cookie */
         return;
-            
-    case 't':   
+
+    case 't':
         say("take.\n");
         pickup();
         return;
@@ -868,8 +927,6 @@ ocookie() {
 }/* ocookie*/
 
 
-/* routine to pick up some gold -- if arg == OMAXGOLD then the pile is
- * worth 100* the argument */
 static void
 ogold() {
     long i;
@@ -878,29 +935,28 @@ ogold() {
 
     i = Map[UU.x][UU.y].obj.iarg;
     say("You find %d gold piece%s.\n",i, i==1 ? "": "s");
-    UU.gold += i;  
+    UU.gold += i;
 
-    Map[UU.x][UU.y].obj = NullObj;
-    Map[UU.x][UU.y].know = 0;
+    Map[UU.x][UU.y].obj = NULL_OBJ;
 }/* ogold*/
 
 
 
 static void
 ohome() {
-    const char *congrats = 
+    const char *congrats =
         "        Congratulations.  You found the potion of cure\n"
         "        dianthroritis! Frankly, no one thought you could do it.\n"
         "\n"
         "        Boy!  Did you surprise them!"
         "\n";
 
-    const char *however = 
+    const char *however =
         "\n"
         "        However...\n"
         "\n";
 
-    const char *toolate = 
+    const char *toolate =
         "        The doctor has the sad duty to inform you that your daughter\n"
         "        has died! You didn't make it in time.  In your agony, you\n"
         "        kill the doctor, your %s and yourself!  Too bad...";
@@ -918,6 +974,8 @@ ohome() {
     const char *stillsick =
         "        Welcome home %s.\n"
         "\n"
+        "        Your %s greets you worriedly.\n"
+        "\n"
         "        The latest word from the doctor is not good.  The\n"
         "        diagnosis is confirmed as dianthroritis.  He guesses\n"
         "        that your daughter has only %d mobuls left in this\n"
@@ -931,9 +989,8 @@ ohome() {
     char buffer[500];
     struct TextBuffer *msg;
     int cause = -1; /* -1 means not dead here. */
-    char *spouse;
 
-    spouse = UU.sex == MALE ? "wife" : "husband";
+    const char *spouse = wife(UU.spouse_gender);
 
     // TO DO: add a delay code to showpages for the dramatic '...'
     msg = tb_malloc(INF_BUFFER, 79);
@@ -944,7 +1001,7 @@ ohome() {
         tb_appendline(msg, congrats);
         if (UU.gtime > TIMELIMIT) {
             tb_appendline(msg, however);
-            
+
             snprintf(buffer, sizeof(buffer), toolate, spouse);
             tb_appendline(msg, buffer);
             cause = DDTOOLATE;
@@ -957,7 +1014,8 @@ ohome() {
         tb_appendline(msg, buffer);
         cause = DDTOOLATE;
     } else {
-        snprintf(buffer, sizeof(buffer), stillsick, UU.name, 
+        snprintf(buffer, sizeof(buffer), stillsick, UU.name,
+                 spouse,
                  (int)((TIMELIMIT-UU.gtime+99)/100),
                  UU.name);
         tb_appendline(msg, buffer);
@@ -983,21 +1041,21 @@ opotion() {
 
     ASSERT(ispotion(pot));
 
-    say("You find %s. ", knownobjname(pot));
+    say("You find %s.\n", knownobjname(pot));
 
-    switch(prompt("Do you (q) quaff it, (t) take it, or (i) ignore it?")) {
+    switch(prompt("Do you (g) quaff it, (t) take it, or (n) do nothing?")) {
     case 0:
-    case 'i':   
-        ignore();  
+    case 'n':
+        ignore();
         return;
 
-    case 'q':   
+    case 'g':
         say("drink.\n");
         udelobj();   /*  destroy potion  */
-        quaffpotion(pot);       
+        quaffpotion(pot);
         return;
 
-    case 't':   
+    case 't':
         say("take.\n");
         pickup();
         return;
@@ -1020,14 +1078,12 @@ raiserandom() {
 }/* raiserandom*/
 
 
+
 /*
   function to drink a potion
 */
 void
 quaffpotion(struct Object pot) {
-    int i,j;
-    int k;
-
     ASSERT (ispotion(pot));
 
     Types[pot.type].isKnown = true;  /* We know what it is *now* */
@@ -1037,9 +1093,9 @@ quaffpotion(struct Object pot) {
     switch(pot.type) {
     case OPSLEEP:
         say("You fall asleep...\n");
-        i=rnd(11)-(UU.constitution>>2)+2;
+        int i = rnd(11)-(UU.constitution>>2)+2;
         while(--i>0) {
-            onemove(DIR_STAY, false);
+            onemove(DIR_STAY);
             nap(1000);
         }
         say(".. you wake up.\n");
@@ -1076,7 +1132,7 @@ quaffpotion(struct Object pot) {
         break;
 
     case OPCHARISMA:
-        say("Aaaoooww!  You're looking good now!\n");  
+        say("Aaaoooww!  You're looking good now!\n");
         UU.charisma++;
         break;
 
@@ -1093,33 +1149,29 @@ quaffpotion(struct Object pot) {
     case OPGOLDDET:
         say("You feel greedy...\n");
         nap(2000);
-        for (i=0; i<MAXY; i++) {
-            for (j=0; j<MAXX; j++) {
-                if (Map[j][i].obj.type == OGOLDPILE) {
-                    Map[j][i].know=1; 
+        for (int y=0; y<MAXY; y++) {
+            for (int x=0; x<MAXX; x++) {
+                if (Map[x][y].obj.type == OGOLDPILE) {
+                    see_and_update_at(x, y);
                 }
             }/* for */
         }/* for */
-        update_display(true);
+        update_display();
         return;
 
     case OPMONSTDET:
-        for (i=0; i<MAXY; i++) {
-            for (j=0; j<MAXX; j++) {
-                if (Map[j][i].mon.id) {
-                    Map[j][i].know=1; 
-                }/* if */
-            }/* for */
-        }/* for */
-        update_display(true);
+        say("Your senses reach out, seeking danger.\n");
+        UU.monster_detection += rnd(20) + 10;
+        update_display();
         return;
 
     case OPFORGETFUL:
         say("You stagger for a moment...\n");
-        for (i=0; i<MAXY; i++)  for (j=0; j<MAXX; j++)
-            Map[j][i].know=0;
-        nap(2000);  
-        update_display(true);
+        set_reveal(false);
+        force_full_update();
+
+        nap(2000);
+        update_display();
         return;
 
     case OPWATER:
@@ -1127,14 +1179,15 @@ quaffpotion(struct Object pot) {
         return;
 
     case OPBLINDNESS:
-        say("You can't see anything!\n"); 
-        UU.blindCount+=500;  /* dang, that's a long time. */
-        update_display(true);
+        say("You can't see anything!\n");
+        UU.blindCount += 500;  /* dang, that's a long time. */
+        force_full_update();
+        update_display();
         return;
 
     case OPCONFUSION:
         say("You feel confused.\n");
-        UU.confuse+= 20+rnd(9); 
+        UU.confuse += 20 + rnd(9);
         return;
 
     case OPHEROISM:
@@ -1142,44 +1195,43 @@ quaffpotion(struct Object pot) {
         if (UU.hero==0) {
             add_to_base_stats(11);
         }/* if */
-        UU.hero += 250;  
+        UU.hero += 250;
         break;
 
     case OPSTURDINESS:
         say("You feel healthier!\n");
-        UU.constitution++;  
+        UU.constitution++;
         break;
 
     case OPGIANTSTR:
         say("You now have incredible bulging muscles!\n");
         if (UU.giantstr==0) UU.strextra += 21;
-        UU.giantstr += 700;  
+        UU.giantstr += 700;
         break;
 
     case OPFIRERESIST:
         say("You feel a chill run up your spine!\n");
-        UU.fireresistance += 1000;  
+        UU.fireresistance += 1000;
         break;
 
     case OPTREASURE:
         say("You feel greedy...\n");
         nap(2000);
-        for (i=0; i<MAXY; i++) {
-            for (j=0; j<MAXX; j++) {
-                k=Map[j][i].obj.type;
-                if ((k==ODIAMOND) || (k==ORUBY) || (k==OEMERALD) 
-                    || (k==OSAPPHIRE) || (k==OLARNEYE) 
-                    || (k==OGOLDPILE)) {
-                    Map[j][i].know = true; 
-                    show1cell(j,i);
+        for (int y = 0; y<MAXY; y++) {
+            for (int x = 0; x<MAXX; x++) {
+                int k = Map[x][y].obj.type;
+                if (k == ODIAMOND || k == ORUBY || k == OEMERALD ||
+                    k == OSAPPHIRE || k == OLARNEYE || k == OGOLDPILE)
+                {
+                    see_and_update_at(x, y);
                 }/* if */
             }/* for */
         }/* for */
-        update_display(true);
+        update_display();
         return;
 
     case OPINSTHEAL:
-        UU.hp = UU.hpmax; 
+        UU.hp = UU.hpmax;
         removecurse();
         break;
 
@@ -1189,13 +1241,13 @@ quaffpotion(struct Object pot) {
 
     case OPPOISON:
         say("You feel a sickness engulf you!\n");
-        UU.halfdam += 200 + rnd(200);  
+        UU.halfdam += 200 + rnd(200);
         return;
 
     case OPSEEINVIS:
         say("You feel your vision sharpen.\n");
         UU.seeinvisible += rnd(1000)+400;
-        MonType[INVISIBLESTALKER].mapchar = 'I';  
+        MonType[INVISIBLESTALKER].mapchar = 'I';
         return;
     };
 
@@ -1206,75 +1258,120 @@ quaffpotion(struct Object pot) {
 static void
 oscroll() {
     struct Object scr = Map[UU.x][UU.y].obj;
-    const char *prmsg;
+    //const char *prmsg;
 
     ASSERT (isscroll(scr));
 
     say("You find %s.\n", knownobjname(scr));
 
-    prmsg = UU.blindCount == 0 ?
-        "Do you (r) read it, (t) take it, or (i) ignore it?" :
-        "Do you (t) take it or (i) ignore it?";
+    char prmsg[100];
+    snprintf(prmsg, sizeof(prmsg), "Do you %s(t) take it or (n) do nothing?",
+             UU.blindCount == 0 ? "(g) read it, " : "");
 
     switch(prompt(prmsg)) {
-    case 0:
-    case 'i':
+    case 'n':
         ignore();
         break;
 
-    case 'r':   
+    case 'g':
         say("read.\n");
-        udelobj();            /*  destroy it  */ 
-        read_scroll(scr);  
+        udelobj();            /*  destroy it  */
+        read_scroll(scr);
         break;
 
-    case 't':   
+    case 't':
         say("take.\n");
         pickup();
         break;
     }/* switch*/
 }/* oscroll*/
 
+// Two-stage prompt; first askes the player if they wish to do
+// anything with the object (and returns 'n' if not), *then* asks the
+// given question if they do..
+static char
+prompt2(const char *question) {
+    char first = prompt("Do you (g) get a closer look or (n) do nothing?");
+    if (first == 'n') { return first; }
+
+    return prompt(question);
+}// prompt2
+
+
+
+
 
 // You have been heard!  Get +3 protection.
 static void
 ohear() {
     say("You have been heard!\n");
-    if (UU.altpro==0) 
+    if (UU.altpro==0)
         UU.moredefenses+=5;
     UU.altpro += 800;   /* protection field */
 }/* ohear*/
 
+
+// You have received divine intervention and all of your problems have
+// been solved.
+//
+// (Fun fact: an earlier version of ReLarn had a bug where praying
+// would win you the game.  This was due to an overlap between
+// GAME_ENDING values and monster IDs; getting killed by a demon lord
+// overlapped with the code for winning the game and praying sometimes
+// summoned them.)
+static void
+odeliverance() {
+    say("A thunderous voice says, \"Thy request is granted!\"\n");
+    headsup();
+    nap(2000);
+
+    say("You are teleported back home.\n");
+    teleport(false, 0);
+
+    say("The potion of cure dianthroritis appears at your feet.\n");
+    headsup();
+    nap(2000);
+
+    createitem(UU.x, UU.y, obj(OPCUREDIANTH, 0));
+}// odeliverance
+
+
 static void
 oaltar() {
-    char *pmsg = "There is a holy altar here. \nDo you (p) pray, "
-        "(m) donate money, (d) desecrate, or (i) ignore it?\n";
-
     if (nearbymonst()) return;
 
-    switch(prompt(pmsg)) {
+    char *pmsg = "There is a holy altar here. \nDo you (p) pray, "
+        "(m) donate, (d) desecrate, or (n) do nothing?";
+
+    switch(prompt2(pmsg)) {
     case 'p': {
-        int p;
-        p = rund(100);
-        if      (p < 12) createmonster(makemonst(getlevel()+2));
-        else if (p < 17) enchweapon(ENCH_ALTAR);
-        else if (p < 22) enchantarmor(ENCH_ALTAR);
-        else if (p < 27) ohear();
-        else             say("Nothing happens.\n");
-        
+
+        // On very rare occasions, miracles can occur.
+        if (rund(10000) == 42) {
+            odeliverance();
+            return;
+        }
+
+        int p = rund(100);
+        if      (p < 12) { createmonster(makemonst(getlevel()+2)); }
+        else if (p < 17) { enchweapon(ENCH_ALTAR); }
+        else if (p < 22) { enchantarmor(ENCH_ALTAR); }
+        else if (p < 27) { ohear(); }
+        else             { say("Nothing happens.\n"); }
+
         return;
     }
 
     case 'm': {
         long amt;
         int p;
-        
+
         for (;;) {
             amt = numPrompt("How much do you donate? ", 0, UU.gold);
             if (amt < 0) continue;
 
             if (amt <= UU.gold) break;
-                
+
             say("You don't have that much!\n");
             nap(1001);
         }/* for */
@@ -1296,9 +1393,9 @@ oaltar() {
         }/* if */
 
         p = rund(16);
-        if (p <  4) { 
+        if (p <  4) {
             say("Thank you.\n");
-        } else if (p <  6) { 
+        } else if (p <  6) {
             enchantarmor(ENCH_ALTAR);
             enchantarmor(ENCH_ALTAR);
         } else if (p < 8) {
@@ -1311,11 +1408,11 @@ oaltar() {
         return;
     }
 
-    case 'd': 
+    case 'd':
         say(" desecrate\n");
-        if (rnd(100)<60) { 
-            createmonster(makemonst(getlevel()+3)+8); 
-            UU.aggravate += 2500; 
+        if (rnd(100)<60) {
+            createmonster(makemonst(getlevel()+3)+8);
+            UU.aggravate += 2500;
         } else if(rnd(100)<5) {
             raiselevel();
         } else if (rnd(101)<30) {
@@ -1325,13 +1422,12 @@ oaltar() {
             say("Nothing happens.\n");
         }/* if .. else*/
         return;
-        
-    case 'i':
-    case 0: 
+
+    case 'n':
         ignore();
-        if (rnd(100)<30) { 
-            createmonster(makemonst(getlevel()+2)); 
-            UU.aggravate += rnd(450); 
+        if (rnd(100)<30) {
+            createmonster(makemonst(getlevel()+2));
+            UU.aggravate += rnd(450);
         }
         return;
     }/* switch*/
@@ -1353,52 +1449,48 @@ othrone() {
     gnome      = (throne.type == OTHRONE);
     deadthrone = (throne.type == ODEADTHRONE);
     prmsg      = deadthrone ?
-        "Do you (s) sit down, or (i) ignore it?" :
-        "Do you (p) pry off jewels, (s) sit down, or (i) ignore it?";
+        "Do you (s) sit down, or (n) do nothing?" :
+        "Do you (p) pry off jewels, (s) sit down, or (n) do nothing?";
     teleMin    = deadthrone ? 25 : 35;
 
     say("There is %s here.\n", objname(throne));
 
-    switch(prompt(prmsg)) {
-    case 0:
-    case 'i':
+    switch(prompt2(prmsg)) {
+    case 'n':
         ignore();
         break;
 
-    case 'p':   
-        say(" pry off\n");  
+    case 'p':
+        say(" pry off\n");
         if (roll < 25) {
             int i;
             for (i=0; i<rnd(4); i++) {
                 creategem(); /*gems pop off the throne*/
             }
             Map[UU.x][UU.y].obj = obj(ODEADTHRONE, 0);
-            Map[UU.x][UU.y].know=0;
         }
         else if (gnome && roll < 40) {
             createmonster(GNOMEKING);
             Map[UU.x][UU.y].obj = obj(OTHRONE2, 0);
-            Map[UU.x][UU.y].know=0;
         }
         else {
             say("Nothing happens.\n");
         }
         break;
-        
-    case 's':   
-        say("sit down\n");  
+
+    case 's':
+        say("sit down\n");
         if (deadthrone && roll < 5) {
             raiselevel();
         }
         else if (gnome && roll < 30) {
             createmonster(GNOMEKING);
             Map[UU.x][UU.y].obj = obj(OTHRONE2, 0);
-            Map[UU.x][UU.y].know=0;
         }
         else if (roll < teleMin) {
-            say("Zaaaappp!  You've been teleported!\n\n"); 
+            say("Zaaaappp!  You've been teleported!\n\n");
             headsup();
-            teleport(0); 
+            teleport(false, -1);
         }
         else {
             say("Nothing happens.\n");
@@ -1414,16 +1506,16 @@ ochest() {
     int i,k;
     char opt;
 
-    say("There is a chest here.\n");  
-    opt = prompt("Do you (t) take it, (o) try to open it, or "
-                 "(i) ignore it? ");
+    say("There is a chest here.\n");
+    opt = prompt("Do you (g) try to open it, (t) take it, or "
+                 "(n) do nothing? ");
 
     switch(opt) {
-    case 'o':   
-        say(" open it.\n");  
+    case 'g':
+        say(" open it.\n");
         k=rnd(101);
         if (k<40) {
-            say("The chest explodes as you open it.\n"); 
+            say("The chest explodes as you open it.\n");
             headsup();
             i = rnd(10);
             if (i > UU.hp) i = UU.hp;
@@ -1431,44 +1523,44 @@ ochest() {
                     i==1?"":"s");
             losehp(i, DDCHEST);
             switch(rnd(10)) {
-            case 1: 
+            case 1:
                 UU.itching+= rnd(1000)+100;
                 say("You feel an irritation spread over your skin!\n");
                 headsup();
                 break;
-                
-            case 2: 
+
+            case 2:
                 UU.clumsiness+= rnd(1600)+200;
                 say("You begin to lose hand-eye co-ordination!\n");
                 headsup();
                 break;
-                
-            case 3: 
+
+            case 3:
                 UU.halfdam+= rnd(1600)+200;
                 say("You suddenly feel sick and BARF all over your "
                        "shoes!\n");
                 headsup();
                 break;
             };
-            Map[UU.x][UU.y].obj = NullObj;
-            Map[UU.x][UU.y].know=0;
-            if (rnd(100)<69) 
+            Map[UU.x][UU.y].obj = NULL_OBJ;
+            if (rnd(100) < 69) {
                 creategem(); /* gems from the chest */
+            }
             dropgold(rnd(110*Map[UU.x][UU.y].obj.iarg+200));
-            for (i=0; i<rnd(4); i++) 
-                something(UU.x, UU.y, Map[UU.x][UU.y].obj.iarg+2);
+            for (i=0; i<rnd(4); i++) {
+                create_rnd_item(UU.x, UU.y, Map[UU.x][UU.y].obj.iarg+2);
+            }
         }
         else say("Nothing happens.\n");
         return;
-        
-    case 't':   
+
+    case 't':
         say(" take\n");
         pickup();
         return;
-        
-    case 'i':
-    case 0: 
-        ignore(); 
+
+    case 'n':
+        ignore();
         return;
     }/* switch*/
 }/* ochest*/
@@ -1480,32 +1572,31 @@ ofountain() {
     int x;
 
     if (nearbymonst()) return;
-    say("There is a fountain here.\n"); 
+    say("There is a fountain here.\n");
 
-    switch(prompt("Do you (d) drink, (w) wash yourself, or (i) ignore it?")) { 
-    case 'i':   
-    case 0:
-        ignore();  
+    switch(prompt2("Do you (d) drink, (w) wash yourself, or (n) do nothing?")){
+    case 'n':
+        ignore();
         break;
 
-    case 'd':   
+    case 'd':
         say("drink\n");
         if (rnd(1501)<4) {
             say("Oops! You caught the dreadful sleep!\n");
             headsup();
-            sleep(3);  
-            game_over_probably(DDSLEEP); 
+            sleep(3);
+            game_over_probably(DDSLEEP);
             return;
         }
         x = rnd(100);
         if (x==1) {
             raiselevel();
-        } else if (x < 11) {  
+        } else if (x < 11) {
             x=rnd((getlevel()<<2)+2);
             say("Bleah! The water tasted like stale gatorade! "
                     "You lose %d hit point%s!\n", (long)x, x==1?"":"s");
-            losehp(x, DDBADWATER); 
-        } else if (x<14) {    
+            losehp(x, DDBADWATER);
+        } else if (x<14) {
             UU.halfdam += 200+rnd(200);
             say("The water makes you vomit.\n");
         } else if (x<17) {
@@ -1518,27 +1609,26 @@ ofountain() {
             fntchange(-1);  /*change char levels downward*/
         }/* if .. else*/
 
-        if (rnd(12)<3) {      
+        if (rnd(12)<3) {
             say("The fountains bubbling slowly quietens.\n");
             /* dead fountain */
-            Map[UU.x][UU.y].obj = obj(ODEADFOUNTAIN, 0); 
-            Map[UU.x][UU.y].know=0;
+            Map[UU.x][UU.y].obj = obj(ODEADFOUNTAIN, 0);
         }
         break;
 
-    case 'w':   
+    case 'w':
         say("wash yourself.\n");
-        if (rnd(100) < 11) {    
+        if (rnd(100) < 11) {
             x=rnd((getlevel()<<2)+2);
             say("The water burns like acid!  You lose %d hit point%s!\n",
                     (long)x, x==1?"":"s");
-            losehp(x, DDBADWATER); 
+            losehp(x, DDBADWATER);
         } else if (rnd(100) < 29) {
             say("You are now clean.\n");
         } else if (rnd(100) < 31) {
             say("This water needs soap -- the dirt didn't come off.\n");
         } else if (rnd(100) < 34) {
-            createmonster(WATERLORD); 
+            createmonster(WATERLORD);
         } else {
             say("Nothing seems to have happened.\n");
         }/* if .. else*/
@@ -1558,60 +1648,60 @@ fntchange(int how) {
     long j;
 
     switch(rnd(9)) {
-    case 1: 
-        say("Your strength");    
-        fch(how,&UU.strength);  
+    case 1:
+        say("Your strength");
+        fch(how,&UU.strength);
         break;
-    case 2: 
-        say("Your intelligence");    
-        fch(how,&UU.intelligence);  
+    case 2:
+        say("Your intelligence");
+        fch(how,&UU.intelligence);
         break;
-    case 3: 
+    case 3:
         say("Your wisdom");
-        fch(how,&UU.wisdom);    
+        fch(how,&UU.wisdom);
         break;
-    case 4: 
+    case 4:
         say("Your constitution");
-        fch(how,&UU.constitution);  
+        fch(how,&UU.constitution);
         break;
-    case 5: 
+    case 5:
         say("Your dexterity");
-        fch(how,&UU.dexterity); 
+        fch(how,&UU.dexterity);
         break;
-    case 6: 
+    case 6:
         say("Your charm");
-        fch(how,&UU.charisma);  
+        fch(how,&UU.charisma);
         break;
-    case 7: 
+    case 7:
         j=rnd(getlevel()+1);
-        if (how < 0) {  
+        if (how < 0) {
             say("You lose %d hit point%s!\n", (long)j, j==1?"":"s");
             losemhp((int)j);
         }
-        else {  
+        else {
             say("You gain %d hit point%s!\n",(long)j, j==1?"":"s");
             raisemhp((int)j);
         }
         break;
-    case 8: 
+    case 8:
         j=rnd(getlevel()+1);
-        if (how > 0) {  
+        if (how > 0) {
             say("You just gained %d spell%s!\n",(long)j, j==1?"":"s");
             raisemspells((int)j);
         }
-        else {  
+        else {
             say("You just lost %d spell%s!\n",(long)j, j==1?"":"s");
             losemspells((int)j);
         }
         break;
-    case 9: 
+    case 9:
         j = 5*rnd((getlevel()+1)*(getlevel()+1));
-        if (how < 0) {  
+        if (how < 0) {
             say("You just lost %d experience point%s!\n",(long)j,
                     j==1?"":"s");
             loseexperience((long)j);
         }
-        else {  
+        else {
             say("You just gained %d experience point%s!\n",(long)j,
                     j==1?"":"s");
             raiseexperience((long)j);
@@ -1625,16 +1715,16 @@ fntchange(int how) {
  */
 static void
 fch(int how, long *x) {
-    if (how < 0 )    {  
+    if (how < 0 )    {
         if (*x > 3) {
-            say(" went down by one!\n");   
-            --(*x); 
+            say(" went down by one!\n");
+            --(*x);
         } else
             say(" remained unchanged!\n");
-    } 
+    }
     else {
-        say(" went up by one!\n"); 
-        (*x)++; 
+        say(" went up by one!\n");
+        (*x)++;
     }
 }/* fch*/
 
@@ -1648,7 +1738,7 @@ oannihilation() {
         return;
     }/* if */
 
-    /* annihilated by sphere of annihilation */ 
+    /* annihilated by sphere of annihilation */
     say("The sphere annihilates you!\n");
     nap(3000);
     game_over_probably(DDSPHERE);
@@ -1659,44 +1749,48 @@ static void
 opit() {
     int i;
 
-    say("You're standing at the top of a pit.\n"); 
+    say("You're standing at the top of a pit.\n");
 
-    if (rnd(101)>81) return;
+    if (rnd(101) > 81) {
+        return;    // You got lucky
+    }
 
-    if (rnd(70) > 9*UU.dexterity-packweight() || rnd(101)<5) {
+    if (rnd(70) > 9 * UU.dexterity - packweight() || rnd(101) < 5) {
         if (has_a(OWWAND)) {
             say("You float right over the pit.\n");
             return;
         }
 
-        if (getlevel()==DBOTTOM || getlevel() == VBOTTOM) {
-            obottomless(); 
+        if (getlevel() == DBOTTOM || getlevel() == VBOTTOM) {
+            obottomless();
         } else {
             if (rnd(101)<20) {
                 i=0;
                 say("You fell ino a pit!\n"
-                       "A poor monster cushions your fall!\n");
+                    "A poor monster cushions your fall!\n");
             } else {
-                i = rnd(getlevel()*3+3);
-                if (i > UU.hp) i = UU.hp;
+                i = rnd(getlevel()*3 + 3);
+                if (i > UU.hp) { i = UU.hp; }
                 say("You fell into a pit!\n"
-                        "You suffer %d hit point%s damage.\n",(long)i,
-                        (i==1)?"":"s");
-            }
+                    "You suffer %d hit point%s damage.\n", (long)i,
+                        i==1 ? "" : "s");
+            }// if .. else
+
             losehp(i, DDPIT);
-            nap(2000);  
-            setlevel(getlevel()+1);  
-            update_display(true);
-        }
-    }/* if */
-}/* opit*/
+            nap(2000);
+
+            setlevel(getlevel()+1);
+            update_display();
+        }// if .. else
+    }// if
+}// opit
 
 
 static void
 obottomless() {
-    say("You fell into a pit leading straight to HELL!\n");  
-    headsup(); 
-    nap(3000);  
+    say("You fell into a pit leading straight to HELL!\n");
+    headsup();
+    nap(3000);
     game_over_probably(DDHELL);
 }/* obottomless*/
 
@@ -1731,37 +1825,38 @@ oelevator() {
         newlevel = level + rnd(DBOTTOM - level);
     }/* if .. else*/
 
-    UU.x = rnd(MAXX-2);  
+    UU.x = rnd(MAXX-2);
     UU.y = rnd(MAXY-2);
     nap(2000);
     setlevel(newlevel);
 
     positionplayer();
 
-    update_display(true);
+    update_display();
 }/* oelevator*/
 
 
 static void
 obook() {
+    say("You find a book.\n");
+
     char ptext[120];
-    snprintf (ptext, sizeof(ptext), "You find a book.\nDo you %s(t) take "
-              "it, or (i) ignore it? ",
-              UU.blindCount ? "" : "(r) read it, "); 
+    snprintf (ptext, sizeof(ptext),
+              "Do you %s(t) take it, or (n) do nothing? ",
+              UU.blindCount ? "" : "(g) read it, ");
 
     switch(prompt(ptext)) {
-    case 0:
-    case 'i':   
-        ignore();   
+    case 'n':
+        ignore();
         break;
 
-    case 'r':   
+    case 'g':
         say("read.\n");
-        readbook(Map[UU.x][UU.y].obj.iarg);   
+        readbook(Map[UU.x][UU.y].obj.iarg);
         udelobj();            /* no more book */
         break;
 
-    case 't':   
+    case 't':
         say("take.\n");
         pickup();
         break;

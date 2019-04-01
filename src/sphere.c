@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -18,6 +18,7 @@
  */
 
 
+// Test if the sphere creation fails for some reason
 static bool
 sphere_failed(int x, int y) {
 
@@ -35,32 +36,29 @@ sphere_failed(int x, int y) {
         return true;
     }// if
 
-    int mon = Map[x][y].mon.id;
+    struct Monster mon = Map[x][y].mon;
 
     /* demons dispel spheres */
-    if (mon >= DEMONLORD1) {
+    if (isdemon(mon)) {
 
-        /* show the demon (ha ha) */
-        int i = Map[x][y].mon.hitp;
-        Map[x][y].know = 1;
-        show1cell(x,y);
-
-        say("The %s dispels the sphere!\n", MonType[mon].name);
-
+        // Briefly show the demon.  (This bypasses some of the vision
+        // checks, which is sort of wrong but I'm going to argue that
+        // the Sphere is psionic in nature and so detectable even to
+        // blind players.)
+        say("The %s dispels the sphere!\n", monname_mon(mon));
         headsup();
-        rmsphere(x,y);  /* remove any spheres that are here */
+        flash_at(x, y, monchar_mon(mon), 2000);
 
-        // Restore the demon
-        Map[x][y].mon.id = mon;
-        Map[x][y].mon.hitp = i;
-        Map[x][y].know = 0;
+        // Now, delete the sphere
+        rmsphere(x,y);
+        see_and_update_at(x, y);    // Because spheres are psionic
 
         return true;
     }// if
 
     /* disenchantress cancels spheres */
-    if (mon == DISENCHANTRESS) {
-        say("The %s cancels the sphere!\n", MonType[mon].name);
+    if (mon.id == DISENCHANTRESS) {
+        say("The %s cancels the sphere!\n", monname_mon(mon));
         headsup();
         sphboom(x,y);   /* blow up stuff around sphere */
         rmsphere(x,y);  /* remove any spheres that are here */
@@ -106,7 +104,7 @@ sphere_failed(int x, int y) {
  */
 void
 newsphere (int x, int y, int dir, int life) {
-    if (dir>=9) { dir=0; }  /* no movement if direction not found */
+    if (dir >= 9) { dir = 0; }  /* no movement if direction not found */
 
     /* don't go out of bounds */
     if (getlevel() == 0) {
@@ -121,11 +119,8 @@ newsphere (int x, int y, int dir, int life) {
     // Annihilate the location
     Map[x][y].obj       = obj(OANNIHILATION, 0);
     Map[x][y].mon.id    = 0;
-    Map[x][y].know      = 1;
-
-    // show the new sphere
-    show1cell(x,y);
-
+    see_and_update_at(x, y);
+    
     // Add the new sphere to the linked list
     struct sphere *sp = xmalloc(sizeof(struct sphere));
     *sp = (struct sphere){spheres, x, y, getlevel(), dir, life};
@@ -145,27 +140,25 @@ void
 rmsphere (int x, int y) {
     struct sphere *sp,*sp2=(struct sphere *)NULL;
 
-    for (sp=spheres; sp; sp2=sp, sp=sp->p) {
+    for (sp = spheres; sp; sp2 = sp, sp = sp->p) {
 
         /* is sphere on this level? */
         if (getlevel() == sp->lev) {
             
             /* locate sphere at this location */
-            if ((x==sp->x) && (y==sp->y)) {
-                Map[x][y].obj.type= Map[x][y].mon.id= 0;
-                Map[x][y].know=1;
-                show1cell(x,y); /* show the now missing sphere */
+            if (x == sp->x && y == sp->y) {
+                Map[x][y].obj.type = Map[x][y].mon.id = 0;
+                see_and_update_at(x, y);
+
                 --UU.sphcast;
-                if (sp==spheres) {
-                    sp2=sp;
-                    spheres=sp->p;
-                    if (sp2) {
-                        free(sp2); }
+                if (sp == spheres) {
+                    sp2 = sp;
+                    spheres = sp->p;
+                    if (sp2) { free(sp2); }
                 }
                 else {
                     sp2->p = sp->p;
-                    if (sp)
-                        free(sp);
+                    if (sp) { free(sp); }
                 }
                 break;
             }// if
@@ -181,19 +174,22 @@ rmsphere (int x, int y) {
  */
 void
 sphboom (int x, int y) {
-    int i,j,k;
 
-    if (UU.holdmonst) UU.holdmonst=1;
-    if (UU.cancellation) UU.cancellation=1;
-    for (j=max(1,x-2); j<min(x+3,MAXX-1); j++)
-        for (i=max(1,y-2); i<min(y+3,MAXY-1); i++) {
-            Map[j][i].obj = NullObj;
-            Map[j][i].mon = NullMon;
-            show1cell(j,i);
-            for (k=0;k<IVENSIZE;k++)
-                if (Invent[k].type==OSPHTALISMAN)
-                    return;
-            if (UU.x==j && UU.y==i) {
+    if (UU.holdmonst) { UU.holdmonst=1; }
+    
+    if (UU.cancellation) { UU.cancellation=1; }
+    
+    for (int ix = max(1, x-2); ix < min(x+3, MAXX-1); ix++)
+        for (int iy = max(1,y-2); iy < min(y+3,MAXY-1); iy++) {
+            Map[ix][iy].obj = NULL_OBJ;
+            Map[ix][iy].mon = NULL_MON;
+            see_and_update_at(ix, iy);
+
+            if (UU.x == ix && UU.y == iy) {
+                
+                // If the player has the Talisman, they're immune...
+                if (has_a(OSPHTALISMAN)) { return; }
+                
                 headsup();
                 say("You were too close to the sphere!\n");
                 nap(3000);

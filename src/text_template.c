@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "text_template.h"
@@ -12,8 +12,6 @@
 static void append_expansion(struct StringBuilder *result,
                              const struct Player *pl,
                              const char *keyword);
-
-
 
 
 char *
@@ -98,11 +96,8 @@ append_expansion(struct StringBuilder *result, const struct Player *pl,
     else if (streq("wealth_gp", keyword)) {
         sb_append(result, gold_gp(pl->gold + pl->bankaccount));
     }
-    else if (streq("lady", keyword)) {
-        sb_append(result, pl->sex == MALE ? "Knight" : "Lady");
-    }
     else if (streq("woman", keyword)) {
-        sb_append(result, pl->sex == MALE ? "man" : "woman");        
+        sb_append(result, woman(pl->gender));
     }
     else if (streq("date", keyword)) {
         time_t tm;

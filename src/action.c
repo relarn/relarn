@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -7,18 +7,12 @@
 #include "display.h"
 #include "show.h"
 #include "game.h"
+#include "look.h"
 
 #include "action.h"
 
 
 static int whatitem(const char *str);
-
-void
-run (DIRECTION dir) {
-    cancelLook(); /* So we don't stop for an object at the start. */
-    while (onemove(dir, false))
-        ;
-}/* run */
 
 /*
   function to wield a weapon
@@ -183,7 +177,7 @@ readscr () {
         readbook(Invent[iz].iarg);  
     }/* if .. else*/    
 
-    Invent[iz] = NullObj; 
+    Invent[iz] = NULL_OBJ; 
 }/* readscr */
 
 /*
@@ -202,7 +196,7 @@ eatcookie () {
 
     show_cookie();
 
-    Invent[iz] = NullObj;;
+    Invent[iz] = NULL_OBJ;;
 }/* eatcookie */
 
 /*
@@ -220,7 +214,7 @@ quaff () {
     ASSERT(ispotion(Invent[iz]));
 
     quaffpotion(Invent[iz]); 
-    Invent[iz] = NullObj;; 
+    Invent[iz] = NULL_OBJ;; 
 }/* quaff */
 
 
@@ -297,42 +291,45 @@ whatitem (const char *action) {
     return result;
 }/* whatitem */
 
-
+// Teleport to a location on `level`.  If level < 0, choose randomly.
+// If `risky` is true, there is a chance of dying from it.
 void 
-teleport(int risky) {
+teleport(bool risky, int level) {
     int new_level;
 
-    if (risky && rnd(151)<3) {
+    if (risky && rnd(151) < 3) {
         game_over_probably(DDENTOMBED);  /* stuck in a rock */
     }
 
     /*show ?? on bottomline if been teleported  */
-    if (!GS.wizardMode) UU.teleflag=1; 
+    if (!GS.wizardMode) { UU.teleflag=1; }
 
-    if (getlevel()==0) {
-        new_level=0;
+    if (level >= 0) {
+        new_level = level;
+    } else if (getlevel() == 0) {
+        new_level = 0;
     } else if (getlevel() <= DBOTTOM) {    /* in dungeon */
-        new_level=rnd(5)+getlevel()-3; 
-        if (new_level>DBOTTOM)
-            new_level=DBOTTOM;
-        if (new_level<0) 
-            new_level=0; 
+        new_level = rnd(5) + getlevel() - 3; 
+        if (new_level > DBOTTOM) { new_level = DBOTTOM; }
+        if (new_level<0) { new_level=0; }
     }
     else {              /* in volcano */
         new_level = rnd(4) + getlevel()-2; 
-        if (new_level>=VBOTTOM)
-            new_level=VBOTTOM;
-        if (new_level<DBOTTOM+1)
+        if (new_level >= VBOTTOM) { new_level = VBOTTOM; }
+        if (new_level < DBOTTOM + 1) {
             new_level=0;  /* back to surface */
+        }
     }
 
     UU.x = rnd(MAXX-2);
     UU.y = rnd(MAXY-2);
     
-    if (getlevel() != new_level)
+    if (getlevel() != new_level) {
         setlevel(new_level);
-    
+    }// if 
+        
     positionplayer();
 
-    update_display(true);
+    force_full_update();
+    update_display();
 }/* teleport*/

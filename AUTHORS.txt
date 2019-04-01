@@ -13,9 +13,12 @@ took it over in 2001.
 iLarn by Bridgit Spitznagel (aka i0lanthe) was derived from Ularn in
 the early 2000s as a version of Ularn for PalmOS devices.
 
-ReLarn was written by Chris Reuter between 2010 and 2018.  It was
+ReLarn was written by Chris Reuter between 2010 and 2019.  It was
 derived from Ularn version "1.15ish" dated "16 November 2001" with
 some elements taken from iLarn.
+
+Line-of-sight code was written by Greg McIntyre via "libfov", most of
+which is included here.
 
 These are all of the contributors that I know of; there are likely
 many others.

@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "game.h"
@@ -17,6 +17,7 @@
 #include "settings.h"
 #include "bill.h"
 #include "version_info.h"
+#include "look.h"
 
 
 
@@ -33,29 +34,52 @@ static void play_turn(void);
 /* Initialize the player using user input. */
 void
 makeplayer () {
-    /* Set the sex and character class unless both of them have
-     * already been set. */
-    if (!GameSettings.sexSet || GameSettings.cclass == CCNONE) {
-        if (!get_player_type(&GameSettings.cclass, &GameSettings.sex)) {
+    /* Set the name, gender, spouse's gender and character class
+     * unless all of them have already been set. */
+    if (!GameSettings.nameSet ||
+        !GameSettings.genderSet ||
+        !GameSettings.spouseGenderSet ||
+        GameSettings.cclass == CCNONE)
+    {
+        if (!get_player_type(GameSettings.name, sizeof(GameSettings.name),
+                             &GameSettings.cclass,
+                             &GameSettings.gender,
+                             &GameSettings.spouseGender))
+        {
             graceful_exit("Never mind...");
-        }/* if */
-        GameSettings.sexSet = true;
+        }// if
+
+        // Not really necessary but leaves the struct in a consistent
+        // state.
+        GameSettings.nameSet = true;
+        GameSettings.genderSet = true;
+        GameSettings.spouseGenderSet = true;
     }/* if */
 
-    init_new_player(GameSettings.cclass, GameSettings.sex,
+    init_new_player(GameSettings.cclass,
+                    GameSettings.gender,
+                    GameSettings.spouseGender,
                     GameSettings.difficulty);
 }/* makeplayer */
 
+
+static void
+run (DIRECTION dir) {
+    cancel_look(); /* So we don't stop for an object at the start. */
+    while (onemove(dir))
+        ;
+}/* run */
+
+
 void
 mainloop() {
-    unsigned long turn_count = 0;   // used for autosave
+    unsigned long action_count = 0;   // used for autosave
 
-    onemove(DIR_CANCEL, true);  /* Let the player get in the first shot. */
     while (1) {
-        onemove(DIR_CANCEL, false);
+        onemove(DIR_CANCEL);
 
-        ++turn_count;
-        if (turn_count % AUTOSAVE_INTERVAL == 0) {
+        ++action_count;
+        if (action_count % AUTOSAVE_INTERVAL == 0) {
             enum SAVE_STATUS ss = save_game();
             if (GS.wizardMode || !ss_success(ss)) {
                 say("Autosave%s (%d)\n",
@@ -66,16 +90,6 @@ mainloop() {
 }/* mainloop*/
 
 
-/* Flags to control certain aspects of read/do loop behaviour. */
-static bool noLook = false; /* If set, disable lookforobject() this round. */
-
-void
-cancelLook() {
-    noLook = true;
-}/* cancelLook*/
-
-
-
 // Perform one turn.  There are two cases for this: normal gameplay
 // and when the player is running.  In the latter case, `dir` is set
 // to a direction of movement and the game behaves as if the player
@@ -83,57 +97,24 @@ cancelLook() {
 //
 //  Monster move is disabled if noMonMove is true.
 bool
-onemove(DIRECTION dir, bool noMonMove) {
+onemove(DIRECTION dir) {
     bool running = (dir != DIR_CANCEL && dir != DIR_STAY);
-    bool keepRunning = !noMonMove;
-    bool missedTurn = (dir == DIR_STAY);
+    bool missedTurn = (dir == DIR_STAY);    // Paralysis, etc.
 
     /* Update player stat modifications due to carried/worn stuff. */
     recalc();
 
-    /* Deal with any object the player may step on.  If the player is
-     * running, this is a good reason to stop. */
-    if (!noLook && !missedTurn) {
-        bool foundSomething;
-        foundSomething = lookforobject();
-
-        // Finding a thing might update some stats so we recalculate
-        // here.
-        if (foundSomething) {
-            recalc();
-        }// if
-
-        /* If we find something while running, stop now BEFORE the
-         * move.  This way, the player regains control while still on
-         * the thing.*/
-        if (foundSomething && running) {
-            cancelLook(); /* Prevent another lookforobject() on the retry. */
-            return false;
-        }/* if */
-    }/* if */
-    noLook = false;
-
-    /* Move the monsters. */
-    if (!noMonMove) {
-        if (UU.hastemonst) movemonst();
-        movemonst();
-    }
-
-
-    /* Display and mark seen the area around the player. */
-    showplayerarea();
-
-    /* update bottom line if needed. */
-    update_stats();
+    /* Update field of view and show changes. */
+    see_and_update_fov();
+    update_display();
 
     /* Do the action.  If 'dir' is a legitimate direction, attempt to
      * move in that direction.  Otherwise, this is an interactive move
      * and we call play_turn() to fetch a command from the user and
      * then do what it says. */
+    bool keepRunning = false;
     if (running) {
-        bool success = false;
-        moveplayer(dir, &success);
-        keepRunning = keepRunning && success;
+        moveplayer(dir, &keepRunning);
     } else if (!missedTurn) {
         play_turn();
     }/* if .. else*/
@@ -143,6 +124,32 @@ onemove(DIRECTION dir, bool noMonMove) {
 
     /* Create new monsters if appropriate. */
     randmonst();
+
+    /* Deal with any object the player may step on.  If the player is
+     * running, this is a good reason to stop. */
+    if (!missedTurn) {
+        bool foundSomething;
+        foundSomething = lookforobject();
+
+        // Finding a thing might update some stats so we recalculate
+        // here.
+        if (foundSomething) {
+            recalc();
+            update_display();
+
+            /* If we find something while running, stop now BEFORE the
+             * move.  This way, the player regains control while still on
+             * the thing.*/
+            if (running) {
+                cancel_look(); /* Prevent another lookforobject() on the retry. */
+                return false;
+            }// if
+        }// if
+    }/* if */
+
+    /* Move the monsters. */
+    if (UU.hastemonst) { movemonst(); }
+    movemonst();
 
     return keepRunning;
 }/* onemove*/
@@ -168,11 +175,11 @@ play_turn () {
 
 
 static void
-showstr() {
+show_inventory() {
     char title[80];
-    snprintf(title, sizeof(title), "Inventory\n\nGold: $%d", UU.gold);
+    snprintf(title, sizeof(title), "Inventory\n\nGold: $%ld", UU.gold);
     inv_pick(title, 0, PRM_NONE);
-}/* showstr*/
+}/* show_inventory*/
 
 
 static bool
@@ -188,7 +195,7 @@ player_action(char key) {
     enable_emergency_save();
     switch(key) {
     case 'i':
-        showstr();
+        show_inventory();
         break; /* status */
 
     case 'D':
@@ -205,8 +212,8 @@ player_action(char key) {
         break;
 
     case 'v':
-        say("ReLarn %s\nDifficulty %ld%s\n"
-            "Based on ULarn.  Free Software, NO WARRANTY!\n",
+        say("ReLarn %s. Difficulty %ld%s.\n"
+            "Based on ULarn. Free Software, NO WARRANTY!\n",
             version_str(), (long)UU.challenge,
             canDebug() ? " (Debugging Available)" : "");
         break;
@@ -217,16 +224,19 @@ player_action(char key) {
 
     case 12:    /* ^R */
     case 18:    /* ^L */
-        update_display(true);
-        break; /*  look        */
+        redraw();
+        break;
 
     default:
         success = true;
     }// switch
     disable_emergency_save();
 
-    // Return if one of the previous cases was reached.
-    if (!success) { return success; }
+    // If one of the previous cases was reached, update and return.
+    if (!success) {
+        sync_ui(false);
+        return success;
+    }
 
 
     // Now, we handle cases that mutate the game state.  Emergency
@@ -268,6 +278,10 @@ player_action(char key) {
     case '.':
         break; /* do nothing, stay here */
 
+    case ',':  /* Like '.' but looks again. */
+        force_look();
+        break;
+
     case 'w':
         wield();
         break; /* wield a weapon */
@@ -284,13 +298,15 @@ player_action(char key) {
         break; /* to read a scroll */
 
     case 'q':
-        if (UU.timestop==0)
+        if (UU.timestop == 0) {
             quaff();
+        }// if 
         break; /* quaff a potion */
 
     case 'd':
-        if (UU.timestop==0)
+        if (UU.timestop==0) {
             dropobj();
+        }
         break; /* to drop an object */
 
     case 'c':
@@ -302,8 +318,9 @@ player_action(char key) {
         break;
 
     case 'e':
-        if (UU.timestop==0)
+        if (UU.timestop==0) {
             eatcookie();
+        }
         break; /* to eat a fortune cookie */
 
     case 'S':
@@ -312,8 +329,8 @@ player_action(char key) {
         break;
 
     case 'Z':
-        if (UU.level>9) {
-            teleport(1);
+        if (UU.level > 9) {
+            teleport(true, -1);
             break;
         }
         say("You don't know how to teleport yet.\n");
@@ -551,7 +568,7 @@ game_over_probably(unsigned cause) {
 
     snprintf(buffer, sizeof(buffer),
              "\n\n\n"
-             "You, %s the level %ld %s, have %s.\n\n",
+             "You, %s the level %d %s, have %s.\n\n",
              UU.name, UU.level, ccname(UU.cclass),
              cause == DDWINNER ? "succeeded" : "died");
     tb_append(msg, buffer);
@@ -572,13 +589,14 @@ game_over_probably(unsigned cause) {
     }// if .. else
 
 
-    tb_append(msg, "The Adventurer's Guild has bestowed you with the title of:\n\n");
+    tb_append(msg,
+              "The Adventurer's Guild has bestowed you with the title of:\n\n");
     tb_append(msg, levelDesc(UU.level));
     tb_append(msg, "\n\n");
 
     snprintf(buffer, sizeof(buffer),
              "Final Score: %ld\nDifficulty: %d\n"
-             "Experience Level: %ld\n",
+             "Experience Level: %d\n",
              score, UU.challenge, UU.level);
     tb_append(msg, buffer);
     tb_append(msg, "\n\n\nThe End\n\n\n");

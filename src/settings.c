@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "settings.h"
@@ -13,8 +13,11 @@ void
 initopts() {
     memset(&GameSettings, 0, sizeof(GameSettings));
 
+    // Default name:
     strncpy(GameSettings.name, get_username(),
             sizeof(GameSettings.name) - 1);
+    GameSettings.nameSet = false;
+    
     GameSettings.name[0] = toupper(GameSettings.name[0]);   
     GameSettings.name[sizeof(GameSettings.name) - 1] = 0;
 }/* initopts*/
@@ -65,6 +68,28 @@ opt(const char *line, const char *opt, char **arg) {
 }// opt
 
 
+
+static bool
+gender(const char *line, const char *prefix, enum GENDER *gender,
+       bool *genderSet)
+{
+    static const char *strings[] = GENDER_STRINGS;
+    for(int n = 0; n < 3; n++) {
+        char desc[20];
+        snprintf(desc, sizeof(desc), "%s%s", prefix, strings[n]);
+
+        if (opt(line, desc, NULL)) {
+            *gender = (enum GENDER)n;
+            *genderSet = true;
+            return true;
+        }// if
+    }// for
+
+    return false;
+}// gender
+
+
+
 /*
  *  function to read and process the larn options file
  */
@@ -90,20 +115,18 @@ readopts (const char *opts_file) {
             continue;
         }/* if */
         
-        if (opt(line, "female", NULL)) {
-            GameSettings.sex = FEMALE;
-            GameSettings.sexSet = true;
+        if (gender(line, "", &GameSettings.gender, &GameSettings.genderSet)) {
             continue;
         }/* if */
 
-        if (opt(line, "male", NULL)) {
-            GameSettings.sex = MALE;
-            GameSettings.sexSet = true;
+        if (gender(line, "spouse_", &GameSettings.spouseGender,
+                   &GameSettings.spouseGenderSet)) {
             continue;
-        }
+        }/* if */
 
         if (opt(line, "name:", &arg)) {
             strncpy(GameSettings.name, arg, sizeof(GameSettings.name));
+            GameSettings.nameSet = true;
             continue;
         }
 
@@ -125,6 +148,16 @@ readopts (const char *opts_file) {
 
         if (opt(line, "no-nap", NULL)) {
             GameSettings.nonap = true;
+            continue;
+        }/* if */
+
+        if (opt(line, "show-fov", NULL)) {
+            GameSettings.showFoV = true;
+            continue;
+        }/* if */
+
+        if (opt(line, "show-unrevealed", NULL)) {
+            GameSettings.showUnrevealed = true;
             continue;
         }/* if */
 

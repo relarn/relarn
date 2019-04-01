@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "cast.h"
@@ -144,7 +144,7 @@ spelldamage(enum SPELL spell) {
         int i = rnd(((UU.level + 1) << 1)) + UU.level + 3;
         godirect(spell, i, (UU.level >= 2) ?
                  "Your missiles hit the %s." :
-                 "Your missile hit the %s.", 25, '+');
+                 "Your missile hit the %s.", 125, '+');
         return;
     }
 
@@ -188,7 +188,7 @@ spelldamage(enum SPELL spell) {
         return;
 
     case CENLIGHTEN: 
-        enlighten(15, 6);
+        enlighten(10, rnd(3));
         return;
 
     case CHEALING:     /* healing */
@@ -426,12 +426,12 @@ isconfuse() {
  */
 static int
 nospell(enum SPELL spell, int monst) {
-    static const char *spellEffects[NUM_MONSTERS+1][SPNUM];
+    static const char *spellEffects[LAST_MONSTER+1][SPNUM];
     static bool spellEffectsInitialized = false;
     const char *msg;
     
     /* bad spell or monst */
-    ASSERT(spell < SPNUM && monst <= NUM_MONSTERS && monst > 0 && spell >= 0);
+    ASSERT(spell < SPNUM && monst <= LAST_MONSTER && monst > 0 && spell >= 0);
 
     /* The first time nospell is called, we initialize spellEffects
      * from the data in spell_immunities.h. */
@@ -452,7 +452,7 @@ nospell(enum SPELL spell, int monst) {
                 int mon   = mondesc[n].imm[i].mon;
                 int spell = mondesc[n].imm[i].spell;
 
-                ASSERT (mon <= NUM_MONSTERS && spell < SPNUM);
+                ASSERT (mon <= LAST_MONSTER && spell < SPNUM);
                 spellEffects[mon][spell] = mondesc[n].msg;
             }/* for */
         }/* for */
@@ -479,13 +479,10 @@ nospell(enum SPELL spell, int monst) {
  * number in spnum, the power of the weapon in hp, say() format string in
  * str, the # of milliseconds to delay between locations in delay, and the
  * character to represent the weapon in cshow.
- *
- * Returns no value. 
  */
 void
 godirect(enum SPELL spnum, int dam, char *str, int delay, char cshow) {
-    uint8_t *it;
-    int x, y, m;
+    int x, y;
     int dx, dy;
 
     if (isconfuse()) {
@@ -504,10 +501,12 @@ godirect(enum SPELL spnum, int dam, char *str, int delay, char cshow) {
     while (dam > 0) {
         x += dx;
         y += dy;
+        
         if ((x > MAXX - 1) || (y > MAXY - 1) || (x < 0) || (y < 0)) {
             dam = 0;
             break;  /* out of bounds */
         }
+        
         /* if energy hits player */
         if ((x == UU.x) && (y == UU.y)) {
             say("You are hit by your own magic!\n");
@@ -518,49 +517,53 @@ godirect(enum SPELL spnum, int dam, char *str, int delay, char cshow) {
 
         /* if not blind show effect */
         if (UU.blindCount == 0) {
-            mapdraw(x, y, cshow, MF_EFFECT);
-            sync_ui(false);
-            nap(delay);
-            show1cell(x, y);
+            flash_at(x, y, cshow, delay);
         }/* if */
 
-        /* is there a monster there? */
-        m = Map[x][y].mon.id;
-        if (m != 0) {
-            /* cannot cast a missile spell at the demon king!! */
-            if (m == DEMONKING || (m >= DEMONLORD1 && rnd(100) < 10)){
+        struct Monster mon = Map[x][y].mon;
+        if (mon.id != 0) {
+            /* If there's a monster here... */
+            flash_at(x, y, monchar(mon.id), delay);
+
+            if (mon.id == DEMONKING || (mon.id >= DEMONLORD1 && rnd(100) < 10)){
+                /* cannot cast a missile spell at the demon king!! */
                 dx *= -1;
                 dy *= -1;
-                say("The %s returns your puny missile!\n", monname(m));
+                say("The %s returns your puny missile!\n", monname_mon(mon));
             } else {
-                if (nospell(spnum, m)) {
+                if (nospell(spnum, mon.id)) {
                     lasthit(x,y);
                     return;
                 }
                 say(str, monname_at(x, y));
                 say("\n");
                 dam -= hitm(x, y, dam);
-                show1cell(x, y);
+
                 nap(1000);
                 x -= dx;
                 y -= dy;
-            }
+            }// if .. else
+            
         } else {
-            it = &Map[x][y].obj.type;
-            switch (*it) {
+
+            /* If there's an object here, we may interact with it... */
+            
+            //it = &Map[x][y].obj.type;
+            struct Object *it = &Map[x][y].obj;
+            switch (it->type) {
             case OWALL:
                 say(str, "wall");
                 
-                if (dam >= 50 + UU.challenge) /*enough damage?*/
-                    /* can't break wall below V2 */
-                    if (getlevel() < VBOTTOM-2)
-                        if ((x < MAXX - 1) && (y < MAXY - 1) 
-                            && (x) && (y)) {
-                            say(" The wall crumbles.");
-                            *it = 0;
-                            Map[x][y].know = 0;
-                            show1cell(x, y);
-                        }
+                if (dam >= 50 + UU.challenge &&     /*enough damage?*/
+                    getlevel() < VBOTTOM-2 && /* can't break wall below V2 */
+
+                    // Within bounds?
+                    x < MAXX - 1 && y < MAXY - 1 && x > 0 && y > 0)
+                {
+                    say(" The wall crumbles.");
+                    *it = NULL_OBJ;
+                }// if 
+                
                 say("\n");
                 dam = 0;
                 break;
@@ -568,10 +571,8 @@ godirect(enum SPELL spnum, int dam, char *str, int delay, char cshow) {
             case OCLOSEDDOOR:
                 say(str, "door");
                 if (dam >= 40) {
-                    say("The door is blasted apart.");
-                    *it = 0;
-                    Map[x][y].know = 0;
-                    show1cell(x, y);
+                    say(" The door is blasted apart.");
+                    *it = NULL_OBJ;
                 }
                 say("\n");
                 dam = 0;
@@ -584,11 +585,8 @@ godirect(enum SPELL spnum, int dam, char *str, int delay, char cshow) {
                         dam = 0;
                         break;
                     }/* if */
-                    say("The statue crumbles.");
-                    *it = OBOOK;
-                    Map[x][y].obj.iarg = getlevel();
-                    Map[x][y].know = false;
-                    show1cell(x, y);
+                    say(" The statue crumbles.");
+                    *it = obj(OBOOK, getlevel());
                 }/* if */
                 say("\n");
                 dam = 0;
@@ -598,9 +596,7 @@ godirect(enum SPELL spnum, int dam, char *str, int delay, char cshow) {
                 say(str, "throne");
                 if (dam > 33) {
                     Map[x][y].mon = mk_mon(GNOMEKING);
-                    *it = OTHRONE2;
-                    Map[x][y].know = false;
-                    show1cell(x, y);
+                    *it = obj(OTHRONE2, 0);
                 }
                 say("\n");
                 dam = 0;
@@ -645,8 +641,14 @@ godirect(enum SPELL spnum, int dam, char *str, int delay, char cshow) {
                 break;
             }/* switch */
         }/* if .. else*/
+
+        // The missile lights the way...
+        if (UU.blindCount == 0) {
+            see_and_update_at(x, y);
+        }// if 
+        
         dam -= 3 + (int) (UU.challenge >> 1);
-    }
+    }// while 
 }/* godirect*/
 
 
@@ -692,8 +694,7 @@ makewall() {
                                              * monsters? */
                     if ((getlevel() != 1) || (x != 33) || (y != MAXY - 1)) {    // <- redundant
                         Map[x][y].obj = obj(OWALL, 0);
-                        Map[x][y].know = 1;
-                        show1cell(x, y);
+
                     } else
                         say("you can't make a wall there!\n");
                 } else
@@ -710,21 +711,18 @@ makewall() {
 /* Perform the 'vaporize rock' spell */
 static void
 vaporizerock() {
-    int xh, yh;
-    int i, j;
-
-    xh = min(UU.x + 1, MAXX - 2);
-    yh = min(UU.y + 1, MAXY - 2);
-    for (i = max(UU.x - 1, 1); i <= xh; i++) {
-        for (j = max(UU.y - 1, 1); j <= yh; j++) {
-            struct MapSquare *pt = &Map[i][j];
+    int xh = min(UU.x + 1, MAXX - 2);
+    int yh = min(UU.y + 1, MAXY - 2);
+    
+    for (int x = max(UU.x - 1, 1); x <= xh; x++) {
+        for (int y = max(UU.y - 1, 1); y <= yh; y++) {
+            struct MapSquare *pt = &Map[x][y];
 
             switch (pt->obj.type) {
             case OWALL:
                 /* can't vpr below V2 */
                 if (getlevel() < VBOTTOM-2) {
-                    pt->obj = NullObj;
-                    pt->know = false;
+                    pt->obj = NULL_OBJ;
                 }/* if */
                 break;
 
@@ -733,18 +731,15 @@ vaporizerock() {
                     break;
                 }/* if */
                 pt->obj = obj (OBOOK, getlevel());
-                pt->know = false;
                 break;
 
             case OTHRONE:
                 pt->mon = mk_mon(GNOMEKING);
-                pt->know = false;
                 pt->obj = obj(OTHRONE2, 0);
                 break;
 
             case OALTAR:
                 pt->mon = mk_mon(DEMONPRINCE);
-                pt->know = false;
                 createmonster(DEMONPRINCE);
                 createmonster(DEMONPRINCE);
                 createmonster(DEMONPRINCE);
@@ -752,17 +747,10 @@ vaporizerock() {
                 break;
             }/* switch */
 
-                
-            switch (pt->mon.id) {
-                /* Xorn takes damage from vpr */
-            case XORN:
-                hitm(i, j, 200);
-                break;
 
-            case TROLL:
-                hitm(i, j, 200);
-                break;
-            }/* switch */
+            if (pt->mon.id == XORN || pt->mon.id == TROLL) {
+                hitm(x, y, 200);
+            }// if
         }/* for */
     }/* for */
 }/* vaporizerock*/
@@ -775,7 +763,8 @@ alter_reality() {
     remake_map_keeping_contents();
 
     loseint();
-    update_display(true);
+    force_full_update();
+    update_display();
     
     GS.spellknow[CALTER_REALITY] = false;
 
@@ -858,7 +847,6 @@ dirpoly() {
     }
     
     Map[x][y].mon = mk_mon(m);
-    show1cell(x, y);    /* show the new monster */
 }/* dirpoly */
 
 
@@ -886,7 +874,7 @@ direct(enum SPELL spell, int dam, char *str, int arg) {
             headsup();
             arg += 2;
             while (arg-- > 0) {
-                onemove(DIR_STAY, false);
+                onemove(DIR_STAY);
                 nap(1000);
             }
             return;
@@ -928,7 +916,7 @@ select_genmonst() {
 
         if (MonType[n].flags & FL_GENOCIDED) continue;
 
-        snprintf(buffer, sizeof(buffer), "'%c' %s", MonType[n].mapchar,
+        snprintf(buffer, sizeof(buffer), "'%c' %s", monchar(n),
                  MonType[n].name);
         pl_add(pl, n, 0, buffer);
     }
@@ -962,9 +950,8 @@ genmonst() {
 
     say("There will be no more %ss.\n", MonType[i].name);
 
-    /* now wipe out monsters on this level */
-    setlevel(getlevel());
-
-    update_display(true);
+    setlevel(getlevel());   // Level change removes genocided monsters
+    
+    update_display();
 }/* genmonst*/
 

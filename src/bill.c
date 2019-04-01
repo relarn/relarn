@@ -59,7 +59,7 @@ write_emails() {
    
     FILE *fh = fopen(mailfile_path(), "a");
     if (!fh) {
-        printf("Error delivering your email: mailer daemon got exorcise.\n");
+        printf("Error delivering your email: mailer daemon got exorcised.\n");
         status = false;
         goto done;
     }
@@ -70,7 +70,7 @@ write_emails() {
         if (n > 1 && !GS.wizardMode && rnd(10) > 6) { continue; }
 
         // Don't bother with a meaningful address or date in the
-        // separator; just somethig that works as a divider.  (Well,
+        // separator; just something that works as a divider.  (Well,
         // the date *is* meaningful; just not wrt. the current game.)
         fprintf(fh, "From relarn@not.an.address Sun Aug 26 20:57:08 1991\n");
 

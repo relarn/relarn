@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "internal_assert.h"
@@ -65,7 +65,7 @@ movemonst() {
     if (UU.timestop) return;
 
     /* Skip alterate turns if the user is fast. */
-    if (UU.hasteSelf && (UU.hasteSelf&1) == 0)  return;
+    if (UU.hasteSelf && (UU.hasteSelf & 1) == 0)  return;
 
     /* move the spheres of annihilation if any */
     if (spheres) {
@@ -73,7 +73,7 @@ movemonst() {
     }/* if */
 
     /* no action if monsters are held */
-    if (UU.holdmonst) return; 
+    if (UU.holdmonst) return;
 
     /* determine window of monsters to move */
     setmovewin(&mvtop, &mvbot, &mvleft, &mvright, &distance);
@@ -83,7 +83,7 @@ movemonst() {
 
     /* Move the monsters in the window. */
     for (y = mvtop; y < mvbot; y++) {
-        for (x=mvleft; x<mvright; x++) {
+        for (x = mvleft; x < mvright; x++) {
 
             /* We only care about squares with a monster that hasn't
              * moved yet. */
@@ -109,24 +109,24 @@ static void
 setmovewin(int *top, int *bot, int *left, int *right, int *distance) {
 
     /* Set the initial window. */
-    *top       = UU.y-3; 
-    *bot       = UU.y+4; 
-    *left      = UU.x-5; 
+    *top       = UU.y-3;
+    *bot       = UU.y+4;
+    *left      = UU.x-5;
     *right     = UU.x+6;
     *distance  = 17;
 
     /* The window is bigger if monsters are aggravated. */
     if (UU.aggravate) {
-        *top        = UU.y-5; 
-        *bot        = UU.y+6; 
-        *left       = UU.x-10; 
+        *top        = UU.y-5;
+        *bot        = UU.y+6;
+        *left       = UU.x-10;
         *right      = UU.x+11;
         *distance   = 40;
     }/* if */
 
     /* Constrain the window to the map. */
     VXY(*left, *top);
-    VXY(*right, *bot); 
+    VXY(*right, *bot);
 
     /* And skip the outer wall on levels that have it (i.e. everything
      * except the town. */
@@ -208,11 +208,11 @@ movesmart(const int x, const int y, const int winleft, const int winright,
     if (MonType[mon_id].intelligence <= 10-UU.challenge) return false;
 
     /* Compute the range of mapsquares to examine. */
-    xl=winleft  - 2; 
-    yl=wintop   - 2; 
-    xh=winright + 2;  
+    xl=winleft  - 2;
+    yl=wintop   - 2;
+    xh=winright + 2;
     yh=winbot   + 2;
-    VXY(xl,yl);  
+    VXY(xl,yl);
     VXY(xh,yh);
 
     /* Initialize screenbuf, marking all inaccessible places with 127
@@ -235,21 +235,21 @@ movesmart(const int x, const int y, const int winleft, const int winright,
             }/* if */
 
             switch(Map[xpt][ypt].obj.type) {
-            case OWALL: 
+            case OWALL:
             case OELEVATORUP:
             case OELEVATORDOWN:
-            case OPIT: 
-            case OTRAPARROW: 
+            case OPIT:
+            case OTRAPARROW:
             case ODARTRAP:
-            case OCLOSEDDOOR: 
-            case OTRAPDOOR: 
+            case OCLOSEDDOOR:
+            case OTRAPDOOR:
             case OTELEPORTER:
             case OEXIT:
-                screenbuf[xpt][ypt]=127;  
+                screenbuf[xpt][ypt]=127;
                 break;
 
-            default:  
-                screenbuf[xpt][ypt]=0;  
+            default:
+                screenbuf[xpt][ypt]=0;
                 break;
             }/* switch*/
 
@@ -258,19 +258,19 @@ movesmart(const int x, const int y, const int winleft, const int winright,
 
     /* The player's location is tier 1. */
     screenbuf[UU.x][UU.y] = 1;
-    
+
     /* Now, find a path from the monster to the player. Starting at
      * the player's tier (1), we search for squares with the given
      * tier and mark all adjacent squares with the next tier's value.
      * We repeat this for increasing tier values until either we reach
      * the monster or we exceed 'distance'. */
-    xl = winleft  - 1; 
-    yl = wintop   - 1; 
-    xh = winright + 1;  
+    xl = winleft  - 1;
+    yl = wintop   - 1;
+    xh = winright + 1;
     yh = winbot   + 1;
-    VXY(xl,yl);  
+    VXY(xl,yl);
     VXY(xh,yh);
-    
+
     for (tier = 1; tier < distance; tier++) {    /* only up to 20 squares away */
         for (ypt = yl; ypt < yh; ypt++) {
             for (xpt = xl; xpt < xh; xpt++) {
@@ -282,7 +282,7 @@ movesmart(const int x, const int y, const int winleft, const int winright,
                     for (z = 1; z < 9; z++) {
                         int xtmp, ytmp;
                         adjpoint(xpt, ypt, z, &xtmp, &ytmp);
-                        
+
                         if (screenbuf[xtmp][ytmp] == 0) {
                             screenbuf[xtmp][ytmp] = tier + 1;
                         }/* if */
@@ -307,7 +307,7 @@ exit_tier_loops:
             int xx, yy;
             adjpoint(x, y, z, &xx, &yy);
 
-            if (screenbuf[xx][yy] > 0 && screenbuf[xx][yy] < best && 
+            if (screenbuf[xx][yy] > 0 && screenbuf[xx][yy] < best &&
                 (xx != x || yy != y)) {
                 best = screenbuf[xx][yy];
                 bestx = xx;
@@ -317,9 +317,9 @@ exit_tier_loops:
 
         /* And if we found a best path, take it. */
         if (best < distance + 1) {
-            mmove(x,y, bestx, besty); 
+            mmove(x,y, bestx, besty);
 
-            return true; 
+            return true;
         }/* if */
     }/* if */
 
@@ -333,18 +333,18 @@ movedumb(int x, int y) {
     int xl, xh, yl, yh, xpt, ypt;
     int bestd = MAXX*MAXY*3, bestx = -1, besty = -1;
 
-    xl = x-1;  
-    yl = y-1;  
-    xh = x+2;  
+    xl = x-1;
+    yl = y-1;
+    xh = x+2;
     yh = y+2;
 
-    if (x < UU.x) 
-        xl++; 
-    else if (x > UU.x) 
+    if (x < UU.x)
+        xl++;
+    else if (x > UU.x)
         --xh;
 
     if (y < UU.y)
-        yl++; 
+        yl++;
     else if (y > UU.y)
         --yh;
 
@@ -393,8 +393,8 @@ movedumb(int x, int y) {
 
 /*
  *  Function to move a monster at (x,y) -- must determine where.
- *      
- *  This routine is responsible for determining where one monster at (x,y) 
+ *
+ *  This routine is responsible for determining where one monster at (x,y)
  *  will move to.  Enter with the monsters coordinates in (x,y).
  *  Returns no value.
  */
@@ -408,7 +408,7 @@ movemt(int x, int y, int winleft, int winright, int wintop, int winbot,
     if (isslow(mon) && (UU.gtime & 1)) {
         return;
     }/* if */
-    
+
     /* choose destination randomly if scared */
     if (movescared(x, y)) return;
 
@@ -426,13 +426,12 @@ static void
 checkpit(int xdest, int ydest) {
     struct Object dob = Map[xdest][ydest].obj;
     struct Monster mon = Map[xdest][ydest].mon;
-    
+
     if (!ismon(mon)) return;
     if (dob.type != OPIT && dob.type != OTRAPDOOR) return;
     if (avoidspits(mon)) return;
 
-    Map[xdest][ydest].mon = NullMon;  /* fell in a pit or trapdoor */
-    show1cell(xdest,ydest);
+    Map[xdest][ydest].mon = NULL_MON;  /* fell in a pit or trapdoor */
 }/* checkpit*/
 
 
@@ -450,7 +449,7 @@ checksphere(int xdest, int ydest) {
     tos = has_a(OSPHTALISMAN);
 
     /* demons dispel spheres */
-    if ((mon.id >= DEMONLORD1 && !tos) || 
+    if ((mon.id >= DEMONLORD1 && !tos) ||
         (tos && mon.id == DEMONKING && (rnd(10) > 7))) {
         say("The %s dispels the sphere!\n", MonType[mon.id].name);
         rmsphere(xdest,ydest);    /* delete the sphere */
@@ -458,7 +457,7 @@ checksphere(int xdest, int ydest) {
     }/* if */
 
     /* Otherise, poof! */
-    Map[xdest][ydest].mon = NullMon;
+    Map[xdest][ydest].mon = NULL_MON;
 }/* checksphere*/
 
 
@@ -471,10 +470,9 @@ checklemming(int xdest, int ydest, int xsrc, int ysrc) {
     if (mon.id != LEMMING) return;
 
     /* 2% chance moving a lemming creates a new lemming in the old
-     * spot, holy shit, ten percent? Damn! */
-    if (rnd(100)<=2) {
+     * spot.  (Was 10%, which is.... annoying.) */
+    if (rnd(100) <= 2) {
         Map[xsrc][ysrc].mon = mon;
-        Map[xsrc][ysrc].know = true;
     }/* if */
 }/* checklemming*/
 
@@ -488,7 +486,7 @@ checkleprechaun(int xdest, int ydest) {
     if (mon.id != LEPRECHAUN) return;
     if (isshiny(dob) && Lev->numStolen < (2*MAX_STOLEN)/3) {
         add_to_stolen (dob, Lev);
-        Map[xdest][ydest].obj = NullObj;
+        Map[xdest][ydest].obj = NULL_OBJ;
     }/* if */
 }/* checkleprechaun*/
 
@@ -518,18 +516,18 @@ checkpointy(int xdest, int ydest) {
     if (!ismon(mon)) return;
     if (dob.type != OTRAPARROW || dob.type != ODARTRAP) return;
 
-    if (dob.type == OTRAPARROW) { 
+    if (dob.type == OTRAPARROW) {
         who = "An arrow";
         mon.hitp -= rnd(10)+getlevel();
     } else {
-        who = "A dart";  
+        who = "A dart";
         mon.hitp -= rnd(6);
     }/* if .. else*/
 
     if (mon.hitp <= 0) {
-        mon = NullMon;
+        mon = NULL_MON;
         what = "%s hits the %s.\n";
-    } else { 
+    } else {
         what = "%s hits and kills the %s.\n";
     }/* if .. else*/
 
@@ -556,11 +554,11 @@ checkzapper(int xdest, int ydest) {
         teleportmonst(xdest, ydest);
     } else if (dob.type == OELEVATORDOWN || dob.type == OELEVATORUP) {
         what = "The %s is carried away by an elevator!\n";
-        Map[xdest][ydest].mon = NullMon;
+        Map[xdest][ydest].mon = NULL_MON;
     } else {
         return;
     }/* if .. else*/
-        
+
     if (!UU.blindCount) {
         say(what, monname_mon(mon));
     }/* if */
@@ -568,39 +566,24 @@ checkzapper(int xdest, int ydest) {
 
 
 
-static void
-showcells(int xsrc, int ysrc, int xdest, int ydest) {
-    struct Monster mon = Map[xdest][ydest].mon;
-
-    if (UU.blindCount || (isdemon(mon) && !UU.eyeOfLarn)) {
-        return;
-    }/* if */
-
-    if (Map[xsrc][ysrc].know)   
-        show1cell(xsrc,ysrc);
-    if (Map[xdest][ydest].know)   
-        show1cell(xdest,ydest);
-}/* showcells*/
-
-
-
 /* Actually move the monster at (xsrc, ysrc) to (xdest, ydest),
  * triggering any related action.  If the player is at (xdest, ydest),
  * this becomes an attack instead. */
-static void 
+static void
 mmove(int xsrc, int ysrc, int xdest, int ydest) {
 
     /* Case 1: moving to player's square attacks him/her. */
     if ((xdest==UU.x) && (ydest==UU.y)) {
-        hitplayer(xsrc,ysrc);  
-        Map[xsrc][ysrc].mon.moved = 1;  
+        hitplayer(xsrc,ysrc);
+        Map[xsrc][ysrc].mon.moved = 1;
         return;
     }
 
     /* Actually move the monster. */
     Map[xdest][ydest].mon = Map[xsrc][ysrc].mon;
     Map[xdest][ydest].mon.moved = 1;
-    Map[xsrc][ysrc].mon = NullMon;
+    Map[xdest][ydest].mon.awake = 1;
+    Map[xsrc][ysrc].mon = NULL_MON;
 
     /* If this is the monster that was last hit, keep it angry. */
     if (is_lasthit(xsrc, ysrc)) {
@@ -615,8 +598,6 @@ mmove(int xsrc, int ysrc, int xdest, int ydest) {
     checktroll(xdest, ydest);
     checkpointy(xdest, ydest);
     checkzapper(xdest, ydest);
-
-    showcells(xsrc, ysrc, xdest, ydest);
 }/* mmove*/
 
 
@@ -627,11 +608,11 @@ teleportmonst (int srcx, int srcy) {
 
     /* max # of creation attempts */
     for (trys = 10; trys > 0; --trys) {
-        destx = rnd(MAXX-2);  
+        destx = rnd(MAXX-2);
         desty = rnd(MAXY-2);
 
-        if ((Map[destx][desty].obj.type == 0) 
-            && (Map[destx][desty].mon.id == 0) 
+        if ((Map[destx][desty].obj.type == 0)
+            && (Map[destx][desty].mon.id == 0)
             && ((UU.x != destx) || (UU.y != desty))) {
             break;
         }/* if */
@@ -641,17 +622,16 @@ teleportmonst (int srcx, int srcy) {
         return;
     }/* if */
 
-    ASSERT (Map[destx][desty].obj.type == 0 && 
-            Map[destx][desty].mon.id == 0);  // sanity check XXX
+    ASSERT (Map[destx][desty].obj.type == 0 &&
+            Map[destx][desty].mon.id == 0);
 
     monid = Map[srcx][srcy].mon.id;
 
     Map[destx][desty].mon = Map[srcx][srcy].mon;
     Map[destx][desty].mon.hitp = mon_hp(monid);
-    Map[destx][desty].know = 1;
+    see_at(destx, desty);
 
-    Map[srcx][srcy].mon = NullMon;
-    Map[srcx][srcy].know=0;
+    Map[srcx][srcy].mon = NULL_MON;
 
     return;
 }/* teleportmonst */

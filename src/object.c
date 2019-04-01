@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "object.h"
@@ -10,9 +10,8 @@
 #include "game.h"
 #include "fortune.h"
 #include "action.h"
+#include "look.h"
 
-
-const struct Object NullObj = {0, 0};
 
 // Master list of object types:
 struct ObjType Types[] = {
@@ -27,18 +26,10 @@ struct ObjType Types[] = {
 static void extendspells (void);
 
 
-/* destroy object at present location */
-void
-udelobj() {
-    Map[UU.x][UU.y].obj = NullObj;
-    Map[UU.x][UU.y].know = false;
-}/* udelobj*/
-
-
 /* Return the flags of the type of obj. */
 static unsigned long
 objflags(struct Object obj) {
-    ASSERT(obj.type <= MAX_OBJ);
+    ASSERT(obj.type < OBJ_COUNT);
     return Types[obj.type].flags;
 }/* objflags*/
 
@@ -65,7 +56,7 @@ isscroll(struct Object obj) {
 /* Test if object 'obj' is readable. */
 bool
 isreadable(struct Object obj) {
-    ASSERT (obj.type < MAX_OBJ);
+    ASSERT (obj.type < OBJ_COUNT);
     return !! (OA_READABLE & objflags(obj));
 }/* isscroll*/
 
@@ -109,6 +100,13 @@ bool
 isshiny(struct Object obj) {
     return isgem(obj) || obj.type == OGOLDPILE;
 }/* isshiny*/
+
+/* Test if this object blocks line-of-sight. */
+bool
+isopaque(struct Object obj) {
+    return obj.type == OWALL || obj.type == OCLOSEDDOOR;
+}/* isshiny*/
+
 
 /* Return the price the bank would give you for this piece. */
 int
@@ -178,7 +176,7 @@ obj(enum OBJECT_ID id, unsigned arg) {
     obj.type = id;
     obj.iarg = arg;
 
-    ASSERT (id < OBJ_COUNT);    /* Ensure valid obj. id */
+    ASSERT (id < OBJ_CONCRETE_COUNT);    /* Ensure valid obj. id */
     ASSERT (obj.iarg == arg);   /* Ensure arg. fits in obj.iarg. */
 
     return obj;
@@ -247,8 +245,8 @@ read_scroll(struct Object scr) {
         return;
 
     case OSENLIGHTEN:
-        nap(2000);
-        enlighten(25, 7);
+        enlighten(25, rnd(3) + 1);
+        say("Everything seems briefly brighter.\n");
         return;
 
     case OSBLANK:
@@ -259,7 +257,7 @@ read_scroll(struct Object scr) {
         return;
 
     case OSCREATEITEM:
-        something(UU.x, UU.y, getlevel());
+        create_rnd_item(UU.x, UU.y, getlevel());
         return;
 
     case OSAGGMONST:
@@ -286,7 +284,7 @@ read_scroll(struct Object scr) {
         return;
 
     case OSTELEPORT:
-        teleport(0);
+        teleport(false, -1);
         return;
 
     case OSAWARENESS:
@@ -322,13 +320,11 @@ read_scroll(struct Object scr) {
         return;
 
     case OSMAGICMAP:
-        for (i=0; i<MAXY; i++) {
-            for (j=0; j<MAXX; j++) {
-                Map[j][i].know = 1;
-            }/* for */
-        }/* for */
+        set_reveal(true);
         nap(2000);
-        update_display(true);
+        
+        force_full_update();
+        update_display();
         return;
 
     case OSHOLDMONST:
@@ -385,7 +381,7 @@ removecurse () {
     int i;
     static long *curse[] = {
         &UU.blindCount, &UU.confuse, &UU.aggravate, &UU.hastemonst,
-        &UU.itching, &UU.laughing, &UU.drainstrength, &UU.clumsiness,
+        &UU.itching, &UU.drainstrength, &UU.clumsiness,
         &UU.infeeblement, &UU.halfdam,
         NULL
     };
@@ -447,12 +443,6 @@ readbook(int booklev) {
 }/* readbook*/
 
 
-/*  routine to save program space   */
-void
-iopts() {
-    say(", or (i) ignore it? ");
-}/* iopts*/
-
 void
 ignore() {
     say("ignore.\n");
@@ -460,22 +450,19 @@ ignore() {
 
 void
 closedoor() {
-    int i;
-
     /* can't find objects is time is stopped*/
     if (UU.timestop)  return;
 
-    showplayerarea();
-
-    i=Map[UU.x][UU.y].obj.type;
+    int i = Map[UU.x][UU.y].obj.type;
     if (i != OOPENDOOR) {
         say("There is no open door here.\n");
         return;
     }
+    
     say("The door closes.\n");
     udelobj();
     Map[UU.x][UU.y].obj = obj(OCLOSEDDOOR, 0);
-    cancelLook(); /* So we won't be asked to open it */
+    cancel_look(); /* So we won't be asked to open it */
 }/* closedoor*/
 
 
@@ -506,8 +493,9 @@ newobject(int lev) {
     int rndval;
     struct Object obj;
 
-    if (getlevel() < 0 || getlevel() > VBOTTOM)
-        return NullObj; /* correct level? */
+    if (getlevel() < 0 || getlevel() > VBOTTOM) {
+        return NULL_OBJ; /* correct level? */
+    }
 
     if (lev > 6) {
         maxrnd = 37;
@@ -572,13 +560,13 @@ newobject(int lev) {
     case 28:
         obj.iarg = rund(lev / 3 + 1);
         if (obj.iarg == 0)
-            return NullObj;
+            return NULL_OBJ;
         break;
     case 29:
     case 31:
         obj.iarg = rund(lev / 2 + 1);
         if (obj.iarg == 0)
-            return NullObj;
+            return NULL_OBJ;
         break;
     case 30:
     case 33:
@@ -625,12 +613,12 @@ storesellvalue(struct Object obj) {
     }
 
     /* In ULarn, the game won't let a Rambo sell the Lance of Death,
-     * presumably on the principal that it's all he's got and selling
-     * it would effectively end his game.  I dislike those sorts of
-     * limitations and anyway, the rewritten UI makes it tricky to
-     * implement, so instead, Rambo has the ability to get full price
-     * for a LoD.  It'll get restocked and end up back in the store so
-     * he can buy it back if need be. */
+     * presumably on the principal that it's all they've got and
+     * selling it would effectively end their game.  I dislike those
+     * sorts of limitations and anyway, the rewritten UI makes it
+     * tricky to implement, so instead, Rambo has the ability to get
+     * full price for a LoD.  It'll get restocked and end up back in
+     * the store so they can buy it back if need be. */
     if (UU.cclass == CCRAMBO && obj.type == OLANCE) {
         value *= 5;
     }/* if */

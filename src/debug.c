@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "debug.h"
@@ -10,6 +10,7 @@
 #include "display.h"
 #include "diag.h"
 #include "bill.h"
+#include "action.h"
 
 #include <limits.h>
 
@@ -43,13 +44,22 @@ enum DBG_CMD {
     DC_NOTHING,
 };
 
+
+static void
+reveal_all() {
+    set_reveal(true);
+    force_full_update();
+}
+
+
+
 static void
 db_makeobjs () {
     int x, y, xi, yi;
     enum OBJECT_ID obj_id;
 
     for (x = 0, y = 0, obj_id = 1, xi = 0, yi = 1;
-         obj_id < OBJ_COUNT;
+         obj_id < OBJ_CONCRETE_COUNT;
          x += xi, y += yi, obj_id++) {
 
         Map[x][y].obj = obj(obj_id, 0);
@@ -69,6 +79,8 @@ db_makeobjs () {
 
         ASSERT (!(x == 1 && y == 0));  /* Did we loop around to the start? */
     }/* for */
+
+    reveal_all();
 }/* db_makeobjs */
 
 
@@ -87,20 +99,9 @@ raise_stats() {
 }
 
 static void
-map_level() {
-    int i,j;
-    for (i=0; i<MAXY; i++) {
-        for (j=0; j<MAXX; j++) {
-            Map[j][i].know=1;
-        }/* for */
-    }/* for */
-}/* map_level*/
-
-
-static void
 identify_all() {
     int i;
-    for (i = 0; i < OBJ_COUNT; i++) {
+    for (i = 0; i < OBJ_CONCRETE_COUNT; i++) {
         Types[i].isKnown = true;
     }/* for */
 }/* identify_all*/
@@ -112,8 +113,9 @@ gear_up() {
     int slots = inv_slots_free();
     int i;
 
-    if (slots < 1) Invent[0] = NullObj;
-    if (slots < 2) Invent[1] = NullObj;
+    if (slots < 1) Invent[0] = NULL_OBJ;
+    if (slots < 2) Invent[1] = NULL_OBJ;
+    if (slots < 3) Invent[2] = NULL_OBJ;
 
     take(obj(OPROTRING,50), "");
     take(obj(OLANCE,25), "");
@@ -125,7 +127,7 @@ gear_up() {
     }/* for */
     
     UU.wear = UU.shield = -1;
-    UU.awareness += 25000;
+    take(obj(OORB, 0), "");
 }/* gear_up*/
 
 
@@ -139,7 +141,7 @@ debugmode() {
 
     /* Give player all spells and all object knowledge. */
     dbg_allspells();
-    map_level();
+    reveal_all();
     identify_all();
 
     db_makeobjs();
@@ -156,7 +158,7 @@ dbg_createobj() {
 
     pl = pl_malloc();
 
-    for (n = 1; n < OBJ_COUNT; n++) {
+    for (n = 1; n < OBJ_CONCRETE_COUNT; n++) {
         char buffer[100];
         snprintf (buffer, sizeof(buffer), "'%c' %s", Types[n].symbol,
                   Types[n].desc);
@@ -171,7 +173,7 @@ dbg_createobj() {
     iarg = numPromptAll("IArg value: ", 0, 0, 0, &status);
     if (!status) return;
 
-    createitem(UU.x,UU.y, id, iarg);
+    createitem(UU.x,UU.y, obj(id, iarg));
 }/* dbg_createobj*/
 
 
@@ -261,15 +263,11 @@ debug_teleport() {
         say(" Cancelled!\n");
         return; 
     }
+
     say("\n");
 
-    UU.x = rnd(MAXX-2);
-    UU.y = rnd(MAXY-2);
-    setlevel(level);
-    positionplayer();
-    
-    update_display(true);
-}
+    teleport(false, level);
+}// debug_teleport
 
 
 
@@ -285,7 +283,7 @@ dbg_select() {
         {DC_GEARUP,     "Fast equip lance, ring and awareness."},
         {DC_SETGOLD,    "Set gold."},
         {DC_MAXLEVEL,   "Set experience level to 100."},
-        {DC_HIGHLEVEL,  "Set experience level to 90 (or so)."},
+        {DC_HIGHLEVEL,  "Set experience level to 60 (or so)."},
         {DC_WIZARD,     "Toggle wizard mode."},
         {DC_CREATEMON,  "Create a monster."},
         {DC_CREATEOBJ,  "Create an object."},
@@ -337,7 +335,7 @@ void debugmenu() {
         break;
 
     case DC_HIGHLEVEL:
-        raiseexperience(195 * 1000000);
+        raiseexperience(90 * 1000000);
         break;
 
     case DC_WIZARD:
@@ -362,7 +360,7 @@ void debugmenu() {
         break;
 
     case DC_MAPLEVEL:
-        map_level();
+        reveal_all();
         break;
 
     case DC_CREATEALL:

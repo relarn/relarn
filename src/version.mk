@@ -4,5 +4,5 @@
 # Note that PATCHLEVEL changes should not break savefile
 # compatibility.
 
-RELARN_VERSION = "2.00"
-RELARN_PATCHLEVEL = "00"
+RELARN_VERSION = 2.1
+RELARN_PATCHLEVEL = 0

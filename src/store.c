@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "store.h"
@@ -15,7 +15,7 @@
 //
 
 // The common inventory
-struct StoreItem ShopInvent[MAX_OBJ];
+struct StoreItem ShopInvent[OBJ_COUNT];
 unsigned ShopInventSz = 0;
 
 
@@ -35,11 +35,11 @@ itemcmp(const void *left, const void *right) {
 static void
 addtoshop(bool found[], unsigned yesflags, unsigned noflags) {
     int n;
-    struct StoreItem Items[MAX_OBJ];
+    struct StoreItem Items[OBJ_CONCRETE_COUNT];
     int itemCount = 0;
 
     /* Find eligible objects. */
-    for (n = 0; n < MAX_OBJ; n++) {
+    for (n = 0; n < OBJ_CONCRETE_COUNT; n++) {
         if (found[n]) continue;
         if (!(Types[n].flags & OA_CANSELL)) {
             found[n] = true;    // We will never use these so skip them now
@@ -61,7 +61,7 @@ addtoshop(bool found[], unsigned yesflags, unsigned noflags) {
 
     /* Append them to ShopInvent. */
     for (n = 0; n < itemCount; n++) {
-        ASSERT(ShopInventSz < MAX_OBJ);
+        ASSERT(ShopInventSz < OBJ_COUNT);
         ShopInvent[ShopInventSz++] = Items[n];
     }/* for */
 
@@ -77,7 +77,7 @@ addtoshop(bool found[], unsigned yesflags, unsigned noflags) {
 // Initialize the common inventory
 void
 initstore() {
-    bool found[MAX_OBJ];
+    bool found[OBJ_COUNT];
 
     memset(found, 0, sizeof(found));
 

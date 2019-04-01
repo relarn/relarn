@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "show.h"
@@ -136,7 +136,7 @@ list_known() {
         pl_add(picker, 0, 0, section == 0 ? "Scrolls:" : "Potions:");
 
         unsigned long mask = section == 0 ? OA_SCROLL : OA_POTION;
-        for (int n = 0; n < OBJ_COUNT; n++) {
+        for (int n = 0; n < OBJ_CONCRETE_COUNT; n++) {
             if ( (Types[n].flags & mask) && Types[n].isKnown ) {
                 char buffer[80];
                 snprintf(buffer, sizeof(buffer), "%*s%s", INDENT, "",

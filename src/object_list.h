@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 /*
@@ -177,3 +177,9 @@ OBJECT(OHASH,            ':',    50,  1,   0,  1,    0,  OA_MOVABLE|OA_DRUG|OA_C
 OBJECT(OSHROOMS,         ':',   100,  1,   0,  1,    0,  OA_MOVABLE|OA_DRUG|OA_CANSELL,                  "some ", "magic mushrooms")
 OBJECT(OCOKE,            ':',   500,  1,   0,  1,    0,  OA_MOVABLE|OA_DRUG|OA_CANSELL,                  "some ", "cocaine")
 OBJECT(OPAD,             '@',     0,  0,   0,  0,    0,  OA_NONE,                                        "", "Dealer McDope's Pad")
+
+// Value to store in MapSquare.recalled to indicate that this cell has
+// not been visited.  It should NEVER appear anywhere else in the
+// game.  Note that code assumes that this is the first non-object
+// entry.
+OBJECT(OUNSEEN,          ' ',     0,  0,   0,  0,    0,  OA_NONE,                                        "an", "unexplored location")

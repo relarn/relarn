@@ -7,7 +7,8 @@ maintainable and better suited to the modern world.  The code has been
 modularized with OS- and UI-dependencies abstracted away, all warnings
 have been fixed, arrays replaced with structures and more.
 
-The goal is to preserve the original game on modern computers.
+The goal is to preserve the spirit of the original game on modern
+computers.
 
 See [Changes.md](Changes.md) for a more complete summary of changes.
 

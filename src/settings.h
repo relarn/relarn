@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // This module provides the global options. These are set from either
@@ -12,14 +12,26 @@
 
 struct Options {
     int difficulty;
-    enum SEX sex;
-    bool sexSet;
+    
+    enum GENDER gender;
+    bool genderSet;
+
+    enum GENDER spouseGender;
+    bool spouseGenderSet;
+    
     char name[PLAYERNAME_MAX];
+    bool nameSet;
+    
+    enum CHAR_CLASS cclass; // Char. class; uses CCNONE to mean unset
+    
     bool nointro;
     bool nonap;
-    enum CHAR_CLASS cclass;
     bool nobeep;
     char emailClient[MAX_CMDLINE_LENGTH];
+    
+    bool showFoV;           // Highlight area of visibility
+    bool showUnrevealed;    // Show unexplored sections as gray
+    bool drawDebugging;     // Debug option
 };
 
 extern struct Options GameSettings;

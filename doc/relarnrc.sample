@@ -1,9 +1,18 @@
 # Sample ~/.relarn/relarnrc file
 
 # The default character is a Pratchett reference, as required by law
-name:       Eskarina
-character:  Wizard
-female
+# name:       Eskarina
+# character:  Wizard
+
+# Gender options:
+# female
+# male
+# nonbinary
+
+# Spouse gender options
+# spouse_female
+# spouse_male
+# spouse_nonbinary
 
 # Disable the "beep"; this is currently usually a visual flash anyway,
 # but you can turn it off here.
@@ -20,6 +29,12 @@ female
 
 # Disable dramatic pauses
 # no-nap
+
+# Hilight the visible field of view (if supported)
+show-fov
+
+# Colour unexplored cells differently from floor cells (if supported)
+show-unrevealed
 
 # Disable the intro text
 # no-introduction

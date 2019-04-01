@@ -4,7 +4,7 @@
 # Absolute path to the installation directory. This also gets
 # hardcoded in the executable but may be overridden by the launch
 # script.
-INST_ROOT = $(HOME)/apps/relarn
+INST_ROOT = $(HOME)/apps/relarn-$(RELARN_VERSION).$(RELARN_PATCHLEVEL)
 #INST_ROOT = /usr/local/games/
 
 # Comment out this line to enable assertions.  You only want to do
@@ -23,8 +23,9 @@ SH_EXT=
 
 ifeq ($(SYS),Linux-x86_64)			# E.g. Ubuntu + PC
 	CC=gcc
+#	CC=clang
 	LD=gcc
-	PLATFORM_CFLAGS= 
+	PLATFORM_CFLAGS=-Wno-format-truncation
 else ifeq ($(SYS),CYGWIN_NT-i686)	# 32-bit Cygwin
 	CC=gcc
 	LD=gcc

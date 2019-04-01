@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -19,7 +19,7 @@
 
 /*      ID               SYM  LV    AC  DMG         ATTACK  INT  GOLD     HP      EXP                              FLAGS  LONG DESC */
 MONSTER(NOMONST,           0,  0,    0,   0,       SA_NONE,   0,    0,     0,       0,                           FL_NONE, "")
-MONSTER(LEMMING,         'l',  1,    0,   0,       SA_NONE,   3,    0,     0,       1,                           FL_NONE, "lemming")
+MONSTER(LEMMING,         'l',  1,    7,   0,       SA_NONE,   3,    0,     0,       1,                           FL_NONE, "lemming")
 MONSTER(GNOME,           'G',  1,   10,   1,       SA_NONE,   8,   30,     2,       2,                           FL_NONE, "gnome")
 MONSTER(HOBGOBLIN,       'H',  1,   13,   2,       SA_NONE,   5,   25,     3,       2,                           FL_SLOW, "hobgoblin")
 MONSTER(JACKAL,          'J',  1,    7,   1,       SA_NONE,   4,    0,     1,       1,                           FL_NONE, "jackal")
@@ -43,7 +43,7 @@ MONSTER(ICELIZARD,       'i',  4,   11,   3, SA_TAILTHWACK,   6,   50,    19,   
 MONSTER(CENTAUR,         'C',  4,    6,   4,       SA_NONE,  10,   40,    25,      43,                           FL_NONE, "centaur")
 MONSTER(TROLL,           'T',  5,    9,   5,       SA_NONE,   9,   80,    55,     250,                           FL_NONE, "troll")
 MONSTER(YETI,            'Y',  5,    8,   4,       SA_NONE,   5,   50,    45,      90,                           FL_NONE, "yeti")
-MONSTER(WHITEDRAGON,     'd',  5,    4,   5,       SA_COLD,  16,  500,    65,    1000,                           FL_NONE, "white dragon")
+MONSTER(WHITEDRAGON,     'd',  5,    4,   5,       SA_COLD,  16,  500,    65,    1000,                         FL_DRAGON, "white dragon")
 MONSTER(ELF,             'e',  5,    3,   3,       SA_NONE,  15,   50,    25,      33,                           FL_NONE, "elf")
 MONSTER(CUBE,            'g',  5,    9,   3,       SA_NONE,   3,    0,    24,      43,                           FL_NONE, "gelatinous cube")
 MONSTER(METAMORPH,       'm',  6,    9,   3,       SA_NONE,   3,    0,    32,      40,                           FL_SLOW, "metamorph")
@@ -66,15 +66,15 @@ MONSTER(UMBERHULK,       'U',  8,    6,   7,    SA_CONFUSE,  14,    0,    67,   
 MONSTER(GNOMEKING,       'k',  9,   -1,  10,       SA_NONE,  18, 2000,   120,    3000,                           FL_NONE, "gnome king")
 MONSTER(MIMIC,           'M',  9,    9,   7,       SA_NONE,   8,    0,    57,     100,                           FL_NONE, "mimic")
 MONSTER(WATERLORD,       'w',  9,  -10,  15,     SA_GUSHER,  20,    0,   155,   15000,                       FL_NOBEHEAD, "water lord")
-MONSTER(BRONZEDRAGON,    'D',  9,    5,   9,    SA_BIGFIRE,  16,  300,    90,    4000,                           FL_NONE, "bronze dragon")
-MONSTER(GREENDRAGON,     'D',  9,    4,   4, SA_TAILTHWACK,  15,  200,    80,    2500,                           FL_NONE, "green dragon")
+MONSTER(BRONZEDRAGON,    'D',  9,    5,   9,    SA_BIGFIRE,  16,  300,    90,    4000,                         FL_DRAGON, "bronze dragon")
+MONSTER(GREENDRAGON,     'D',  9,    4,   4, SA_TAILTHWACK,  15,  200,    80,    2500,                         FL_DRAGON, "green dragon")
 MONSTER(PURPLEWORM,      'P',  9,   -1,  13,       SA_NONE,   3,  100,   130,   15000,                           FL_NONE, "purple worm")
 MONSTER(XVART,           'x',  9,   -2,  14,       SA_NONE,  13,    0,   100,    1000,                           FL_SLOW, "xvart")
 MONSTER(SPIRITNAGA,      'n', 10,  -20,  15,      SA_MULTI,  23,    0,   100,   20000,              FL_NOBEHEAD|FL_NOPIT, "spirit naga")
-MONSTER(SILVERDRAGON,    'D', 10,   -4,  10,    SA_BIGFIRE,  20,  700,   110,   10000,                          FL_NOPIT, "silver dragon")
-MONSTER(PLATINUMDRAGON,  'D', 10,   -7,  15,   SA_PSIONICS,  22, 1000,   150,   25000,                          FL_NOPIT, "platinum dragon")
+MONSTER(SILVERDRAGON,    'D', 10,   -4,  10,    SA_BIGFIRE,  20,  700,   110,   10000,                FL_DRAGON|FL_NOPIT, "silver dragon")
+MONSTER(PLATINUMDRAGON,  'D', 10,   -7,  15,   SA_PSIONICS,  22, 1000,   150,   25000,                FL_DRAGON|FL_NOPIT, "platinum dragon")
 MONSTER(GREENURCHIN,     'u', 10,   -5,  12,       SA_NONE,   3,    0,    95,    5000,                           FL_NONE, "green urchin")
-MONSTER(REDDRAGON,       'D', 10,   -4,  13,    SA_BIGFIRE,  19,  800,   120,   14000,                           FL_NONE, "red dragon")
+MONSTER(REDDRAGON,       'D', 10,   -4,  13,    SA_BIGFIRE,  19,  800,   120,   14000,                         FL_DRAGON, "red dragon")
 MONSTER(DEMONLORD1,      '1', 12,  -40,  20,    SA_BIGFIRE,  20,    0,   150,   50000,     FL_DEMON|FL_NOPIT|FL_NOBEHEAD, "type I demon lord")
 MONSTER(DEMONLORD2,      '2', 13,  -45,  25,       SA_COLD,  22,    0,   200,   75000,     FL_DEMON|FL_NOPIT|FL_NOBEHEAD, "type II demon lord")
 MONSTER(DEMONLORD3,      '3', 14,  -50,  30, SA_DISENCHANT,  24,    0,   250,  100000,     FL_DEMON|FL_NOPIT|FL_NOBEHEAD, "type III demon lord")

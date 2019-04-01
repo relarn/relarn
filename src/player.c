@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "internal_assert.h"
@@ -9,8 +9,11 @@
 #include "game.h"
 #include "settings.h"
 #include "os.h"
+#include "look.h"
 
 #include "player.h"
+
+#include <limits.h>
 
 
 // The global player state object.
@@ -212,11 +215,15 @@ init_cc_specific (enum CHAR_CLASS cc) {
 
 // Initialize the player for the start of a new game.
 void
-init_new_player (enum CHAR_CLASS cc, enum SEX sex, int difficulty) {
+init_new_player (enum CHAR_CLASS cc,
+                 enum GENDER gender,
+                 enum GENDER spouse_gender,
+                 int difficulty) {
     int n;
 
     UU.cclass = cc;
-    UU.sex = sex;
+    UU.gender = gender;
+    UU.spouse_gender = spouse_gender;
     UU.challenge = difficulty;
 
     strncpy(UU.name, GameSettings.name, sizeof(UU.name));
@@ -300,10 +307,10 @@ raisemhp (int x) {
 // Raise spells by x, capped to UU.spellmax.
 void
 raisespells (int x) {
-    UU.spells += x;    
+    UU.spells += x;
     if (UU.spells > UU.spellmax) {
         UU.spells = UU.spellmax;
-    }// if 
+    }// if
 }/* raisespells */
 
 
@@ -339,10 +346,9 @@ losemspells (int x) {
  */
 void
 positionplayer () {
-    int try;
-    try = 2;
+    int try = 3;
 
-    while ((Map[UU.x][UU.y].obj.type || Map[UU.x][UU.y].mon.id) && (try)) {
+    while ((Map[UU.x][UU.y].obj.type || Map[UU.x][UU.y].mon.id) && try) {
         if (++UU.x >= MAXX-1) {
             UU.x = 1;
             if (++UU.y >= MAXY-1) {
@@ -352,22 +358,22 @@ positionplayer () {
         }/* if */
     }/* while */
 
-    if (try==0)
-        say("Failure in positionplayer\n");
+    if (try == 0) {
+        // We shouldn't get here.
+        say("That felt WIERD!\n");
+    }
 }/* positionplayer */
 
 
 /*
- *  moveplayer(dir)
- *
  * subroutine to move the player from one cell to another
  *
  * returns false if can't move in that direction or hit a monster or on an object
  * else returns true.
  *
- * If 'success' is not NULL, it is set to true if the action
- * succeeded, (i.e. the turn can continue) and false if not (i.e. the
- * move is impossible so no action took place).
+ * '*success' is set to true if the action succeeded, (i.e. the turn
+ * can continue) and false if not (i.e. the move is impossible so no
+ * action took place).  'success' must be a valid pointer.
  *
  * If 'success' is false, the result will also be false but the
  * reverse is not always true.  (E.g. hitting a monster doesn't move
@@ -376,11 +382,9 @@ positionplayer () {
 
 bool
 moveplayer (DIRECTION dir, bool* success) {
-    int new_x,new_y,i,j;
+    int new_x, new_y, i;
 
-    if (success) *success = true;
-
-    show1cell(UU.x,UU.y);
+    *success = true;
 
     if (dir == DIR_CANCEL) {
         *success = false;  /* CANCEL never succeeds 'cause it's invalid. */
@@ -394,31 +398,32 @@ moveplayer (DIRECTION dir, bool* success) {
 
     adjpoint(UU.x, UU.y, dir, &new_x, &new_y);
 
-    if (new_x<0 || new_x>=MAXX || new_y<0 || new_y>=MAXY) {
-        if (success) *success = false;
+    if (new_x < 0 || new_x >= MAXX || new_y < 0 || new_y >= MAXY) {
+        *success = false;
         return false;
     }
 
     i = Map[new_x][new_y].obj.type;
-    j = Map[new_x][new_y].mon.id;
 
-    /*  hit a wall  */
-    if (i == OWALL && UU.wtw == 0) {
+    /*  hit a wall (or closed door while time has stopped) */
+    if ((i == OWALL && UU.wtw == 0) ||
+        (UU.timestop != 0 && i == OCLOSEDDOOR))
+    {
         bool foundit = false;
 
         /* If blind and the destination is unknown, reveal it but
          * spend a turn doing it. */
-        if (UU.blindCount > 0 && !Map[new_x][new_y].know) {
-            showcellat(new_x, new_y, 0, 0);
+        if (UU.blindCount > 0 && !known_at(new_x, new_y)) {
+            see_and_update_at(new_x, new_y);
             foundit = true;
         }/* if */
 
-        if (success) *success = foundit;
+        *success = foundit;
         return false;
-    }
+    }// if
 
-    if (j>0) {
-        hitmonster(new_x,new_y);
+    if (Map[new_x][new_y].mon.id > 0) {
+        hitmonster(new_x, new_y);
         return false;
     } /* hit a monster*/
 
@@ -490,21 +495,21 @@ carrymod(enum OBJECT_ID oid) {
 // etc.  of the player
 void
 recalc () {
-    UU.ac = UU.moredefenses
+    UU.cached_ac = UU.moredefenses
         + statfor(UU.wear)
         + statfor(UU.shield)
         + carrymod(OPROTRING);
 
-    UU.wclass = UU.moreDmg
+    UU.cached_wc = UU.moreDmg
         + statfor(UU.wield)
         + carrymod(ODAMRING)
         + carrymod(OBELT);
 
-    UU.regen = 1
+    UU.cached_regen_rate = 1
         + carrymod(OREGENRING)
         + carrymod(ORINGOFEXTRA);
 
-    UU.energy = carrymod(OENERGYRING);
+    UU.cached_spell_regen_boost = carrymod(OENERGYRING);
 }/* recalc */
 
 
@@ -517,7 +522,7 @@ void
 quit () {
     int i;
 
-    i = prompt("\n\nDo you really want to quit? (y)es, (n)o, (s)ave");
+    i = prompt("\n\nDo you really want to quit? (y)es, (s)ave, (n)o");
 
     if (i == 'y') {
         delete_save_files();
@@ -525,7 +530,7 @@ quit () {
         return;
     }
 
-    if (i == 'n' || i == 0)   {
+    if (i == 'n') {
         say(" no.\n");
         return;
     }
@@ -630,17 +635,13 @@ updatestats (struct Object thing) {
 /* Put 'thing' in player's inventory.  If inventory is full, display
  * 'ifullMsg' unless it's NULL or empty, in which case it desplays a
  * default message.  Returns true on success, false on failure. */
-int
+bool
 take (struct Object thing, const char *ifullMsg) {
-    int limit, i;
-    bool foundslot;
+    const int limit = inv_limit();
 
-    if ((limit = 15+(UU.level>>1)) > IVENSIZE) {
-        limit = IVENSIZE;
-    }/* if */
-
-    foundslot = false;
-    for (i=0; i<limit; i++) {
+    bool foundslot = false;
+    int i = 0;
+    for (i = 0; i < limit; i++) {
         if (Invent[i].type==0) {
             Invent[i] = thing;
             foundslot = true;
@@ -664,7 +665,8 @@ take (struct Object thing, const char *ifullMsg) {
     if (UU.blindCount == 0 && thing.type == OLARNEYE) {
         say("Your sight fades for a moment...\n");
         nap(2000);
-        update_display(true);
+        see_and_update_fov();
+        update_display();
         say("Your sight returns, and everything looks crystal-clear!\n");
     }/* if */
 
@@ -689,7 +691,7 @@ inventremove(int index) {
         recalc();
     }/* if */
 
-    Invent[index] = NullObj;
+    Invent[index] = NULL_OBJ;
 
     return obj;
 }/* inventremove*/
@@ -706,12 +708,11 @@ drop_object (int k) {
     int itm, pitflag=0;
     struct Object obj;
 
-    if ((k<0) || (k>25))
-        return(0);
+    if (k < 0 || k > 25) { return 0; }
 
     itm = Invent[k].type;
 
-    if (itm==0) {
+    if (itm == 0) {
         say("You don't have item %c! \n",k+'a');
         return(1);
     }
@@ -733,10 +734,8 @@ drop_object (int k) {
         say("It disappears down the pit.\n");
     }/* if .. else*/
 
-    Map[UU.x][UU.y].know = 0;
-
-/* say dropped an item so wont ask to pick it up right away */
-    cancelLook();
+    // say dropped an item so wont ask to pick it up right away
+    cancel_look();
     return(0);
 }/* drop_object */
 
@@ -751,7 +750,7 @@ drop_gold (unsigned long amount) {
 
     if (o->type == OGOLDPILE) {
         dropamt += o->iarg;
-        *o = NullObj;
+        *o = NULL_OBJ;
     }/* if */
 
     if (o->type && o->type != OPIT) {
@@ -777,8 +776,7 @@ drop_gold (unsigned long amount) {
     o->type = OGOLDPILE;
     o->iarg = dropamt;
 
-    Map[UU.x][UU.y].know=0;
-    cancelLook();
+    cancel_look();
 
     return;
 }/* drop_gold */
@@ -825,7 +823,7 @@ enchantarmor (enum ENCH_HOW how) {
             ASSERT(how == ENCH_SCROLL);
             say("Your %s vibrates violently and crumbles into dust!\n",
                     objname(Invent[which]));
-            Invent[which] = NullObj;
+            Invent[which] = NULL_OBJ;
             *whichSlot = -1;
             adjustcvalues(Invent[which].type, Invent[which].iarg); /* Surely not? */
             return;
@@ -882,14 +880,10 @@ enchweapon (int how) {
 /* Return number of free inventory slots. */
 int
 inv_slots_free () {
-    int i, limit, count;
+    int count = 0;
 
-    // FIX: violates DRY principal
-    if ((limit = 15+(UU.level>>1)) > IVENSIZE) {
-        limit = IVENSIZE;
-    }/* if */
-
-    for (i = 0, count = 0; i < limit; i++) {
+    const int limit = inv_limit();
+    for (int i = 0; i < limit; i++) {
         if (Invent[i].type == 0) {
             ++count;
         }/* if */
@@ -946,7 +940,7 @@ stealsomething (int x, int y) {
 
     add_to_stolen (Invent[index], Lev);
 
-    Invent[index] = NullObj;
+    Invent[index] = NULL_OBJ;
 
     return true;
 }/* stealsomething */
@@ -966,33 +960,6 @@ emptyhanded () {
     return true;
 }
 
-/*
- *  function to create a gem on a square near the player
- */
-void
-creategem () {
-    int i,j;
-
-    switch(rnd(4)) {
-    case 1:
-        i=ODIAMOND;
-        j=50;
-        break;
-    case 2:
-        i=ORUBY;
-        j=40;
-        break;
-    case 3:
-        i=OEMERALD;
-        j=30;
-        break;
-    default:
-        i=OSAPPHIRE;
-        j=20;
-        break;
-    };
-    createitem(UU.x, UU.y, i, rnd(j)+(j/10));
-}/* creategem */
 
 /*
  *  function to change character levels as needed when dropping an object
@@ -1034,11 +1001,11 @@ adjustcvalues (int itm, int arg) {
         break;
 
     case OSLAYER:
-        UU.intelligence-=10;
+        UU.intelligence -= 10;
         break;
 
     case OPSTAFF:
-        UU.wisdom-=10;
+        UU.wisdom -= 10;
         break;
 
     case OORBOFDRAGON:
@@ -1062,7 +1029,7 @@ adjustcvalues (int itm, int arg) {
         if (UU.blindCount == 0) {
             say("Your sight fades for a moment...\n");
             nap(2000);
-            update_display(true);
+            update_display();
             say("Your sight returns but everything looks dull and faded.\n");
         }
         return;
@@ -1134,10 +1101,16 @@ graduated(struct Player *p) {
 
 
 
-// Update time-based fields in UU by a larger amount.  Used for stuff
-// like scrolls of Time Warp or taking a course at U of Larn.
+// Add 'time' (which may be negative) to each active player stat in
+// UU, truncating to 1 if the result would go negative.  Used for
+// stuff like scrolls of Time Warp or taking a course at U of Larn.
+//
+// As a special case, a time value of LONG_MIN (used for Permanence)
+// makes all active effects permanent by setting the field to
+// LONG_MAX.  This makes the counts more consistent and (hopefully)
+// better at highlighting bugs.
 void
-adjusttime(long tim) {
+adjusttime(long time) {
     static long *time_change[] = {
         &UU.hasteSelf, &UU.hero, &UU.altpro, &UU.protectionTime,
         &UU.dexCount, &UU.strcount, &UU.giantstr, &UU.charmcount,
@@ -1148,16 +1121,28 @@ adjusttime(long tim) {
         &UU.itching, &UU.clumsiness, &UU.wtw,
 
         NULL};
-    int j;
 
-    for (j=0; time_change[j]; j++) { /* adjust time related parameters */
-        if (*(time_change[j])) {
-            if (*(time_change[j]) < tim+1) {
-                *(time_change[j]) = 1;
-            } else {
-                *(time_change[j]) -= tim;
-            }/* if .. else*/
-        }/* if */
+    for (int j = 0; time_change[j]; j++) { /* adjust time related parameters */
+        // We only affect active stats
+        if (*time_change[j] == 0) { continue; }
+
+        // We treat LONG_MIN as special so that Permanance will give
+        // them all the same countdown.
+        if (time == LONG_MIN) {
+            *time_change[j] = LONG_MAX;
+            continue;
+        }// if
+
+        // If the update can take the result negative, just set it to
+        // 1 and let the call to regen() finish it off.
+        if (*time_change[j] < time + 1) {
+            *time_change[j] = 1;
+            continue;
+        }
+
+        // Otherwise, do a straight update.  We offset by one because
+        // regen() will do the final iteration.
+        *time_change[j] -= (time - 1);
     }/* for */
 
     regen();
@@ -1172,29 +1157,33 @@ regen() {
 #   define DECR(n) if(n) --n
 
     if (UU.timestop)  {
-        if(--UU.timestop<=0)
-        return;
+        if(--UU.timestop <= 0) return;
     }   /* for stop time spell */
 
     if (UU.strength<3) {
         UU.strength=3;
     }
-    if (UU.hasteSelf==0)        // XXXX probably wrong
+
+    // Advance time.  hasteSelf halves it but timestop stops it completely.
+    if (UU.timestop == 0 && UU.hasteSelf % 2 == 0) {
         UU.gtime++;
+    }
 
-    if (UU.hp != UU.hpmax)
-        if (UU.regencounter-- <= 0) /*regenerate hit points */
-        {
-            UU.regencounter = 22 + (UU.challenge<<1) - UU.level;
-            if ((UU.hp += UU.regen) > UU.hpmax)
-                UU.hp = UU.hpmax;
-        }
+    /*regenerate hit points */
+    if (UU.hp < UU.hpmax) {
+        --UU.regencounter;
 
-    if (UU.spells < UU.spellmax)        /*regenerate spells */
-        if (UU.ecounter-- <= 0) {
-            UU.ecounter = 100+4*(UU.challenge-UU.level-UU.energy);
-            UU.spells++;
-        }
+        if (UU.regencounter <= 0) {
+            UU.regencounter = 22 + (2 * (int)UU.challenge) - UU.level;
+            UU.hp = min(UU.hp + UU.cached_regen_rate, UU.hpmax);
+        }// if
+    }// if
+
+    if (UU.spells < UU.spellmax && UU.ecounter-- <= 0) { // regenerate spells
+        UU.ecounter = 100 + 4 * ((int)UU.challenge - UU.level
+                                 - UU.cached_spell_regen_boost);
+        UU.spells++;
+    }
 
     if (UU.hero)
         if (--UU.hero <= 0) {
@@ -1249,6 +1238,8 @@ regen() {
     DECR(UU.fireresistance);
     DECR(UU.spiritpro);
     DECR(UU.undeadpro);
+    DECR(UU.enlightenment.time);
+    DECR(UU.monster_detection);
 
     if (UU.globe)
         if (--UU.globe<=0) {
@@ -1436,37 +1427,35 @@ raiseexperience (long points) {
         /* if we changed levels */
         switch ((int)UU.level) {
         case 94:    /* earth guardian */
-            UU.wtw = 99999L;
+            UU.wtw = LONG_MAX;
             break;
         case 95:    /* air guardian */
-            UU.invisibility = 99999L;
+            UU.invisibility = LONG_MAX;
             break;
         case 96:    /* fire guardian */
-            UU.fireresistance = 99999L;
+            UU.fireresistance = LONG_MAX;
             break;
         case 97:    /* water guardian */
-            UU.cancellation = 99999L;
+            UU.cancellation = LONG_MAX;
             break;
         case 98:    /* time guardian */
-            UU.hasteSelf = 99999L;
+            UU.hasteSelf = LONG_MAX;
             break;
         case 99:    /* ethereal guardian */
-            UU.stealth = 99999L;
-            UU.spiritpro = 99999L;
+            UU.stealth = LONG_MAX;
+            UU.spiritpro = LONG_MAX;
             break;
         case 100:
             say("You are now The Creator!\n");
-            {
-                int i,j;
 
-                for (i=0; i<MAXY; i++)
-                    for (j=0; j<MAXX; j++)
-                        Map[j][i].know=1;
-                for (i=0; i<SPNUM; i++)
-                    GS.spellknow[i] = true;
-                for (i=0; i < OBJ_COUNT; i++)
-                    Types[i].isKnown = true;
+            set_reveal(true);
+
+            for (int i=0; i<SPNUM; i++) {
+                GS.spellknow[i] = true;
             }
+            for (int i=0; i < OBJ_CONCRETE_COUNT; i++) {
+                Types[i].isKnown = true;
+            }// for
             break;
         }/* switch */
     }/* while */

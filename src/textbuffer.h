@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -26,6 +26,7 @@
 struct TextBuffer {
     char **text;        /* Text lines, NULL-terminated array of strings */
     int num_lines;      /* Number of lines in 'text'. */
+    int total_lines;    /* Total num. lines appended */
     bool newline;       /* Next append starts a new line. */
 
     int max_lines;      /* Max. lines in 'text' or -1 for unlimited. */
@@ -41,5 +42,10 @@ void tb_center_all(struct TextBuffer *tb);
 
 
 static inline int tb_num_lines(struct TextBuffer *tb) { return tb->num_lines; }
+static inline int tb_total_lines(struct TextBuffer *tb) {
+    return tb->total_lines;
+}
+static inline bool tb_newline(struct TextBuffer *tb) { return tb->newline; }
+
 
 #endif

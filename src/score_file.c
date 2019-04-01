@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "score_file.h"
@@ -22,7 +22,7 @@ struct ScoreBoardEntry {
     long        challenge;              // the level of difficulty
     long        level;                  // final cave level
     long        exp_level;              // final experience level
-    long        sex;                    // Character gender
+    long        gender;                 // Character gender
     char        who[PLAYERNAME_MAX];    // the name of the character        
     char        cclass[20];             // the character class
     char        ending[80];             // how the player met their end
@@ -72,7 +72,7 @@ encode(const struct ScoreBoardEntry* dest) {
              dest->challenge,
              dest->level,
              dest->exp_level,
-             dest->sex,
+             dest->gender,
              dest->who,
              dest->cclass,
              dest->ending);
@@ -105,7 +105,7 @@ decode(char *line, struct ScoreBoardEntry* dest) {
                     {true,   &dest->challenge,  sizeof(long)},
                     {true,   &dest->level,      sizeof(long)},
                     {true,   &dest->exp_level,  sizeof(long)},
-                    {true,   &dest->sex,        sizeof(long)},
+                    {true,   &dest->gender,     sizeof(long)},
                     {false,  dest->who,         sizeof(dest->who)},
                     {false,  dest->cclass,      sizeof(dest->cclass)},
                     {false,  dest->ending,      sizeof(dest->ending)},
@@ -207,7 +207,7 @@ newscore(long score, bool won, int level, const char *ending,
     sb.uid = get_user_id();
     strncpy(sb.who, uu->name, sizeof(sb.who));
     strncpy(sb.cclass, ccname(uu->cclass), sizeof(sb.cclass));
-    sb.sex = uu->sex;
+    sb.gender = uu->gender;
     sb.won = won;
     sb.score = score;
     sb.taxes = compute_taxes_owed(uu);
@@ -286,7 +286,7 @@ showscores(bool all) {
         
         char nbuf[sizeof(item.who) + sizeof(item.cclass) + 60];
         snprintf(nbuf, sizeof(nbuf), "%s the %s %s", item.who,
-                 item.sex == 0 ? "female" : "male", item.cclass);
+                 female((enum GENDER)item.gender), item.cclass);
 
         printf("%9ld %-5s %-9d %-5d %-5d\n%s, you %s\n",
                item.score,

@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // Code to implement the behaviour of an object when the player steps
@@ -9,6 +9,8 @@
 
 #include <stdbool.h>
 
+void cancel_look(void);
+void force_look (void);
 bool lookforobject(void);
 
 #endif

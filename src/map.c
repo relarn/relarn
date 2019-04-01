@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2018; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -9,10 +9,13 @@
 #include "store.h"
 #include "create.h"
 #include "game.h"
+#include "look.h"
 #include "os.h"
 #include "version_info.h"
 
 #include "map.h"
+
+#include <errno.h>
 
 // PLATFORM_ID is an ID specific to the OS+CPU so we can detect
 // incompatible save files.  It needs to get set on the command line.
@@ -32,15 +35,15 @@ static void setlevptrs (void);
 
 static void newcavelevel (void);
 static void makemaze(int lev);
-static int cannedlevel(int lev);
+static bool cannedlevel(int lev);
 static void treasureroom(int lv);
-static void troom(int lv, int xsize, int ysize, int tx, int ty, 
+static void troom(int lv, int xsize, int ysize, int tx, int ty,
                   enum DOORTRAP_RISK dtr);
 static void makeobject(int j);
 static void fillmroom(int n, int what, int arg);
 static void froom(int n, int itm, int arg);
 static void fillroom(struct Object obj);
-static void sethp(int flg);
+static void sethp(bool firstVisit);
 static void checkgen(void);
 static void eat(int xx, int yy);
 static unsigned int sum(unsigned char *data, int n);
@@ -67,7 +70,13 @@ getlevelname() {
     };
     return levelname[LevelNum];
 }// getlevelname
-    
+
+/* destroy object at present location */
+void
+udelobj() {
+    Map[UU.x][UU.y].obj = NULL_OBJ;
+    see_and_update_fov();
+}/* udelobj*/
 
 
 void
@@ -82,10 +91,13 @@ setlevel(int newlevel) {
 
     /* Set the global level and map pointers. */
     setlevptrs();
-    
+
+    /* We'll probably need to redraw the display. */
+    force_full_update();
+
     /* restore the new level if it exists. */
     if (Lev->exists) {
-        sethp(0);
+        sethp(false);
         checkgen();
         return;
     }/* if */
@@ -125,10 +137,10 @@ add_to_stolen(struct Object thing, struct Level *lev) {
 
 
 /* Return a random object from the stolen items list and remove it
- * from the list.  If the list is empty, return NullObj. */
+ * from the list.  If the list is empty, return NULL_OBJ. */
 struct Object
 remove_stolen(struct Level *lev) {
-    struct Object result = NullObj;
+    struct Object result = NULL_OBJ;
     unsigned index;
 
     if (lev->numStolen <= 0) {
@@ -164,7 +176,7 @@ savegame_to_file(FILE *fh) {
     unsigned int filesum = 0;
     char *save_id = RELARN_SAVE_ID;
     bool known[OBJ_COUNT];
-    
+
     bool errorOccurred = false;
 
     bwrite(fh, &filesum, save_id, strlen(save_id) + 1, &errorOccurred);
@@ -202,7 +214,7 @@ savegame_to_file(FILE *fh) {
 
     /* file sum */
     bwrite(fh, &filesum, (char *)&filesum, sizeof(filesum), &errorOccurred);
-    
+
     return !errorOccurred;
 }/* savegame_to_file*/
 
@@ -223,9 +235,9 @@ restore_from_file(FILE *fh, bool *wrongFileVersion) {
     size_t sid_len;
     bool known[OBJ_COUNT];
     bool fileErr = false;
-        
+
     if (wrongFileVersion) { *wrongFileVersion = false; }
-    
+
     sid_len = strlen(RELARN_SAVE_ID);
     ASSERT (sid_len < sizeof(save_id_maybe));
 
@@ -245,7 +257,7 @@ restore_from_file(FILE *fh, bool *wrongFileVersion) {
     bread(fh, &filesum, (char *)known, sizeof(known), &fileErr);
 
     bread(fh, &filesum, (char *)&ShopInventSz, sizeof(ShopInventSz), &fileErr);
-    if(ShopInventSz >= MAX_OBJ) { return false; }
+    if(ShopInventSz >= OBJ_COUNT) { return false; }
 
     bread(fh, &filesum, (char*)ShopInvent, sizeof(struct StoreItem)*ShopInventSz,
           &fileErr);
@@ -282,11 +294,11 @@ restore_from_file(FILE *fh, bool *wrongFileVersion) {
     //
     // Now, do post-load processing
     //
-       
+
     if (UU.hp <= 0) {
         return false;
     }
-   
+
     for (i = 0; i < OBJ_COUNT; i++) {
         Types[i].isKnown = known[i];
     }/* for */
@@ -301,7 +313,7 @@ restore_from_file(FILE *fh, bool *wrongFileVersion) {
      *  We restore it here.
      */
     if (Map[UU.x][UU.y].obj.type == OCLOSEDDOOR) {
-        cancelLook();
+        cancel_look();
     }/* if */
 
     return true;
@@ -315,7 +327,7 @@ bwrite(FILE *fh, unsigned int *filesum, char *buf, size_t num,
        bool *errorOccurred)
 {
     if (*errorOccurred) { return; }
-    
+
     int nwrote = fwrite(buf, 1, num, fh);
     if (nwrote != num) { *errorOccurred = true; }
 
@@ -331,7 +343,7 @@ bread(FILE *fh, unsigned int *filesum, char *buf, size_t bufSize,
       bool *errorOccurred)
 {
     if (*errorOccurred) { return; }
-    
+
     int nread = fread(buf, 1, bufSize, fh);
     if (nread != bufSize) { *errorOccurred = true; }
 
@@ -364,29 +376,25 @@ sum(unsigned char *data, int n) {
 /* Create the current cave level.  Must not already exist. */
 static void
 newcavelevel () {
-    int i,j;
-
     ASSERT(!Lev->exists);
 
-    /* Mark unknown. */
-    for (i=0; i<MAXY; i++) {
-        for (j=0; j<MAXX; j++) {
-            Map[j][i].know = 0;
-            Map[j][i].mon.id = 0;
-        }/* for */
-    }/* for */
+    /* Create the maze; either fetch it from a data file or generate
+     * it. */
+    int lvl = getlevel();
+    if (lvl == 0 || !cannedlevel(lvl)) {
+        makemaze(lvl);
+    }// if
 
-    makemaze(getlevel());
+    // Forget everything
+    set_reveal(false);
+
     makeobject(getlevel());
     Lev->exists = true;   /* first time here */
-    sethp(1);
+    sethp(true);
 
     if (getlevel() == 0) {
-        for (j=0; j<MAXY; j++) {
-            for (i=0; i<MAXX; i++) {
-                Map[i][j].know=1;
-            }/* for */
-        }/* for */
+        set_reveal(true);
+        force_full_update();
     }/* if */
 
     checkgen(); /* wipe out any genocided monsters */
@@ -403,36 +411,27 @@ newcavelevel () {
 void
 makemaze (int lev) {
     int mx,mxl,mxh,my,myl,myh,tmp2;
-    int tmp, z;
-
-    if (lev > 0) {
-        /* read maze from data file */
-        if (cannedlevel(lev) == 1)
-            return;
-    }
-
-    if (lev==0)
-        tmp=0;
-    else
-        tmp=OWALL;
+    int z;
 
     /* fill up maze */
-    for (int i=0; i<MAXY; i++) {
-        for (int j=0; j<MAXX; j++) {
-            Map[j][i].obj = obj(tmp, 0);
+    {
+        struct Object wallish = lev == 0 ? NULL_OBJ : obj(OWALL, 0);
+        for (int i=0; i<MAXY; i++) {
+            for (int j=0; j<MAXX; j++) {
+                Map[j][i].obj = wallish;
+            }/* for */
         }/* for */
-    }/* for */
+    }
 
     /* don't need to do anymore for level 0 */
-    if (lev==0)
-        return;
+    if (lev==0) { return; }
 
     eat(1,1);
 
     /*  now for open spaces -- not on level 15 or V5 */
     if (lev != DBOTTOM && lev != VBOTTOM) {
         tmp2 = rnd(3)+3;
-        for (tmp=0; tmp<tmp2; tmp++) {
+        for (int tmp=0; tmp<tmp2; tmp++) {
             my = rnd(11)+2;
             myl = my - rnd(2);
             myh = my + rnd(2);
@@ -450,7 +449,7 @@ makemaze (int lev) {
             }
             for (int i = mxl; i < mxh; i++) {
                 for (int j = myl; j < myh; j++) {
-                    Map[i][j].obj = NullObj;
+                    Map[i][j].obj = NULL_OBJ;
                     if (z) { Map[i][j].mon = mk_mon(z); }
                 }/* for */
             }/* for */
@@ -458,14 +457,16 @@ makemaze (int lev) {
     }/* if */
 
     if (lev!=DBOTTOM && lev!=VBOTTOM) {
-        my=rnd(MAXY-2);
-        for (int i = 1; i < MAXX-1; i++)
-            Map[i][my].obj = NullObj;
+        my = rnd(MAXY-2);
+        for (int i = 1; i < MAXX-1; i++) {
+            Map[i][my].obj = NULL_OBJ;
+        }
     }
 
     /* no treasure rooms above level 5 */
-    if (lev>4)
+    if (lev>4) {
         treasureroom(lev);
+    }
 }/* makemaze */
 
 
@@ -480,31 +481,30 @@ remake_map_keeping_contents() {
         } i;
     } *save;
     int sc = 0;         /* # items saved */
-    int i, j;
 
     save = xmalloc(sizeof(struct isave) * MAXX * MAXY * 2);
 
     /* save all items and monsters and fill the level with walls */
-    for (j = 0; j < MAXY; j++) {
-        for (i = 0; i < MAXX; i++) {
-            struct MapSquare *pt = &Map[i][j];
+    for (int y = 0; y < MAXY; y++) {
+        for (int x = 0; x < MAXX; x++) {
+            struct MapSquare *pt = &Map[x][y];
             int item = pt->obj.type;
 
             if (item && item != OWALL && item != OANNIHILATION && item!=OEXIT){
                 save[sc].type = ITEM;
-                save[sc].i.o = Map[i][j].obj;
+                save[sc].i.o = Map[x][y].obj;
                 ++sc;
             }/* if */
 
             if (pt->mon.id) {
                 save[sc].type = MONSTER;
-                save[sc].i.m = Map[i][j].mon;
+                save[sc].i.m = Map[x][y].mon;
                 ++sc;
             }/* if */
 
             pt->obj = obj(OWALL, 0);
-            pt->mon = NullMon;
-            pt->know = false;
+            pt->mon = NULL_MON;
+            forget_at(x, y);
         }/* for */
     }/* for */
 
@@ -516,34 +516,33 @@ remake_map_keeping_contents() {
         Map[CAVE_EXIT_X][CAVE_EXIT_Y].obj = obj(OEXIT, 0);
     }
 
-    for (j = rnd(MAXY - 2), i = 1; i < MAXX - 1; i++) {
+    for (int j = rnd(MAXY - 2), i = 1; i < MAXX - 1; i++) {
         Map[i][j].obj = obj(ONONE, 0);
     }
 
     /* put objects back in level */
     for (; sc >= 0;  --sc) {
         int tries = 100;
-        i = 1;
-        j = 1;
+        int x = 1, y = 1;
 
         if (save[sc].type == ITEM) {
-            while (--tries > 0 && Map[i][j].obj.type) {
-                i = rnd(MAXX - 1);
-                j = rnd(MAXY - 1);
+            while (--tries > 0 && Map[x][y].obj.type) {
+                x = rnd(MAXX - 1);
+                y = rnd(MAXY - 1);
             }/* while */
 
             if (tries) {
-                Map[i][j].obj = save[sc].i.o;
+                Map[x][y].obj = save[sc].i.o;
             }/* if */
         } else {    /* put monsters back in */
-            while (--tries > 0 && (Map[i][j].obj.type == OWALL
-                                      || Map[i][j].mon.id)) {
-                i = rnd(MAXX - 1);
-                j = rnd(MAXY - 1);
+            while (--tries > 0 && (Map[x][y].obj.type == OWALL
+                                      || Map[x][y].mon.id)) {
+                x = rnd(MAXX - 1);
+                y = rnd(MAXY - 1);
             }/* while */
 
             if (tries) {
-                Map[i][j].mon = save[sc].i.m;
+                Map[x][y].mon = save[sc].i.m;
             }/* if */
         }/* if .. else*/
     }/* for */
@@ -566,32 +565,32 @@ eat (int xx, int yy) {
             if (xx <= 2) break; /*  west    */
             if ((Map[xx-1][yy].obj.type!=OWALL) || (Map[xx-2][yy].obj.type!=OWALL))
                 break;
-            Map[xx-1][yy].obj = NullObj;
-            Map[xx-2][yy].obj = NullObj;
+            Map[xx-1][yy].obj = NULL_OBJ;
+            Map[xx-2][yy].obj = NULL_OBJ;
             eat(xx-2,yy);
             break;
         case 2:
             if (xx >= MAXX-3) break;  /*    east    */
             if ((Map[xx+1][yy].obj.type!=OWALL) || (Map[xx+2][yy].obj.type!=OWALL))
                 break;
-            Map[xx+1][yy].obj = NullObj;
-            Map[xx+2][yy].obj = NullObj;
+            Map[xx+1][yy].obj = NULL_OBJ;
+            Map[xx+2][yy].obj = NULL_OBJ;
             eat(xx+2,yy);
             break;
         case 3:
             if (yy <= 2) break; /*  south   */
             if ((Map[xx][yy-1].obj.type!=OWALL) || (Map[xx][yy-2].obj.type!=OWALL))
                 break;
-            Map[xx][yy-1].obj = NullObj;
-            Map[xx][yy-2].obj = NullObj;
+            Map[xx][yy-1].obj = NULL_OBJ;
+            Map[xx][yy-2].obj = NULL_OBJ;
             eat(xx,yy-2);
             break;
         case 4:
             if (yy >= MAXY-3 ) break;   /*north */
             if ((Map[xx][yy+1].obj.type!=OWALL) || (Map[xx][yy+2].obj.type!=OWALL))
                 break;
-            Map[xx][yy+1].obj = NullObj;
-            Map[xx][yy+2].obj = NullObj;
+            Map[xx][yy+1].obj = NULL_OBJ;
+            Map[xx][yy+2].obj = NULL_OBJ;
             eat(xx,yy+2);
             break;
         };
@@ -613,7 +612,7 @@ eat (int xx, int yy) {
  *              For each maze:
  *                  18 lines (1st 17 used)
  *                  67 characters per line
- * 
+ *
  *  line seperating maps must be single newline character
  *
  *  Special characters in maze data file:
@@ -621,47 +620,60 @@ eat (int xx, int yy) {
  *      #   wall            D   door
  *      .   random monster      ~   eye of larn
  *      !   cure dianthroritis  -   random object
+ *
+ *
+ *  Returns true if maze was created, false if not (for any rason)
  */
 
-static int
-cannedlevel (int lev) {
-    int i,j;
+static bool
+cannedlevel(int lev) {
     FILE *fp;
     char *row, buf[128];
 
     /* only read a maze from file around half the time */
     if (lev != DBOTTOM && lev != VBOTTOM && rnd(100) < 50) {
-        return -1;
-    }// if 
-    
+        return false;
+    }// if
+
     fp = fopen(levels_path(), "r");
     if (!fp) {
         // We should really be checking for this at startup and
         // refusing to start if the file is missing; then make this a
         // fatal error.  But for now, a subtle error message is
         // easiest.
-        say("You feel vague existential unease.\n");
-        return -1;
+        say("%s",
+            GS.wizardMode                   ?
+            "Error opening levels file!\n"  :
+            "You feel vague existential unease.\n");
+        return false;
     }/* if */
 
     /*
     **      Umap format
     **  - lines must be MAXX characters long
-    **  - must be MAXY characters per map 
+    **  - must be MAXY characters per map
     **  - each map must be seperated by 1 blank line
     **    (a single newline character)
     */
-    i=rund(20);
-    fseek(fp, (long)(i * ((MAXX * MAXY)+MAXY+1)), 0);
-
-    for (i=0; i<MAXY; i++) {
-        if ((row = fgets(buf, 128, fp)) == (char *)NULL) {
-            perror("fgets");
-            fclose(fp);
-            return (-1);
+    {
+        int idx = rund(20);
+        fseek(fp, (long)(idx * ((MAXX * MAXY)+MAXY+1)), 0);
+        if (GS.wizardMode) {
+            say("Loading canned level %d.\n", idx);
         }
-        for (j=0; j<MAXX; j++) {
-            struct Object nob = NullObj;
+    }
+
+    for (int y = 0; y < MAXY; y++) {
+        if ((row = fgets(buf, 128, fp)) == (char *)NULL) {
+            if (GS.wizardMode) {
+                say("IO error when reading map: %s\n", strerror(errno));
+            }
+            fclose(fp);
+            return false;
+        }
+
+        for (int x = 0; x < MAXX; x++) {
+            struct Object nob = NULL_OBJ;
             int mit = 0;
 
             switch(*row++) {
@@ -672,7 +684,7 @@ cannedlevel (int lev) {
                 nob = door(DTO_LOW);
                 break;
             case '~':
-                if (lev!=DBOTTOM) 
+                if (lev!=DBOTTOM)
                     break;
                 nob = obj(OLARNEYE, 0);
                 mit = DEMONPRINCE;
@@ -691,13 +703,13 @@ cannedlevel (int lev) {
                 nob = newobject(lev+1);
                 break;
             };
-            Map[j][i].obj = nob;
-            Map[j][i].mon = mk_mon(mit);
-            Map[j][i].know = false;
-        }
-    }
+            Map[x][y].obj = nob;
+            Map[x][y].mon = mk_mon(mit);
+        }// for
+    }// for
+
     fclose(fp);
-    return(1);
+    return true;
 }/* cannedlevel */
 
 /*
@@ -734,16 +746,16 @@ troom(int lv, int xsize, int ysize, int tx, int ty, enum DOORTRAP_RISK dtr) {
 
     for (j=ty-1; j<=ty+ysize; j++)
         for (i=tx-1; i<=tx+xsize; i++)  /* clear out space for room */
-            Map[i][j].obj = NullObj;
+            Map[i][j].obj = NULL_OBJ;
     for (j=ty; j<ty+ysize; j++)
         /* now put in the walls */
         for (i=tx; i<tx+xsize; i++) {
             Map[i][j].obj = obj(OWALL, 0);
-            Map[i][j].mon = NullMon;
+            Map[i][j].mon = NULL_MON;
         }
     for (j=ty+1; j<ty+ysize-1; j++)
         for (i=tx+1; i<tx+xsize-1; i++) /* now clear out interior */
-            Map[i][j].obj = NullObj;
+            Map[i][j].obj = NULL_OBJ;
 
     /* locate the door on the treasure room */
     switch(rnd(2))  {
@@ -764,10 +776,10 @@ troom(int lv, int xsize, int ysize, int tx, int ty, enum DOORTRAP_RISK dtr) {
     int py = ty + (ysize>>1);
     for (int px = tx + 1; px <= tx + xsize - 2; px += 2) {
         for (i=0, j = rnd(6); i<=j; i++) {
-            something(px, py, lv+2);
+            create_rnd_item(px, py, lv+2);
             createmonster_near(px, py, makemonst(lv + UU.challenge < 3 ? 2 : 4));
-        }// for 
-    }// for 
+        }// for
+    }// for
 }/* troom*/
 
 
@@ -800,7 +812,7 @@ makestairs(int lev) {
     }/* if */
 
     /* stairs down everywhere except V1 and V2 */
-    if (lev > 0 && lev != DBOTTOM && lev < VBOTTOM-2) { 
+    if (lev > 0 && lev != DBOTTOM && lev < VBOTTOM-2) {
         fillroom(obj(OSTAIRSDOWN,0));
     }/* if */
 
@@ -811,17 +823,18 @@ makestairs(int lev) {
     }/* if */
 
     /* Maybe put the elevator up here. */
-    if (UU.elvup == 0
-        && lev > 3 && lev != VBOTTOM && lev < DBOTTOM && rnd(100) > 85) {
+    if (! UU.has_up_elevator &&
+        lev > 3 && lev != VBOTTOM && lev < DBOTTOM && rnd(100) > 85
+        ) {
         fillroom(obj(OELEVATORUP,0));
-        UU.elvup++;
+        UU.has_up_elevator = true;
     }/* if */
 
     /* Elevator down: < lev 10, or 15 or V5 */
     if ((lev > 0 && lev <= DBOTTOM-5) || lev == DBOTTOM || lev == VBOTTOM) {
-        if (UU.elvdown==0 && rnd(100) > 85) {
+        if (! UU.has_down_elevator && rnd(100) > 85) {
             fillroom(obj(OELEVATORDOWN,0));
-            UU.elvdown++;
+            UU.has_down_elevator = true;
         }/* if */
     }/* if */
 
@@ -881,7 +894,7 @@ makerare(int lev) {
     /* Other rare artifacts: */
     makeif(OSWORDofSLASHING,    rnd(120) < 8,               NULL);
     makeif(OHAMMER,             rnd(120) < 8,               NULL);
-    makeif(OSLAYER,             lev>=10 && lev <= VBOTTOM && 
+    makeif(OSLAYER,             lev>=10 && lev <= VBOTTOM &&
                                 rnd(100) > 85-(lev-10),
                                                             NULL);
     makeif(OVORPAL,             rnd(120) < 8,               NULL);
@@ -977,7 +990,7 @@ makeobject (int lev) {
 static void
 fillmroom (int count, int what, int arg) {
     int i;
-    
+
     for (i=0; i<count; i++) {
         fillroom(obj(what,arg));
     }/* for */
@@ -1025,25 +1038,23 @@ fillroom (struct Object obj) {
  *  if sethp(1) then wipe out old monsters else leave them there
  */
 static void
-sethp (int flg) {
+sethp (bool firstVisit) {
     int i,j;
 
-    if (flg)
-        for (i=0; i<MAXY; i++)
-            for (j=0; j<MAXX; j++)
-                Map[j][i].mon.awake=0;
-    if (getlevel() == 0) {
-        UU.teleflag=0;
-        return;
-    } /*    if teleported and found level 1 then know level we are on */
+    // Level 0 has no monsters.
+    if (getlevel() == 0) { return; }
 
-    if (flg)
-        j = rnd(12) + 2 + (getlevel() >> 1);
-    else
-        j = (getlevel()>>1) + 1;
+    // Add a bunch of new monsters; more if firstVisit is true
+    {
+        int numMon = (getlevel() >> 1) + 1;
 
-    for (i=0; i<j; i++)
-        fillmonst(makemonst(getlevel()));
+        if (firstVisit) { numMon += rnd(12) + 2; }
+
+        for (int i = 0; i < numMon; i++) {
+            fillmonst(makemonst(getlevel()));
+        }
+    }
+
 
     /*
     ** level 11 gets 1 demon lord
@@ -1085,20 +1096,12 @@ checkgen () {
     for (y=0; y<MAXY; y++) {
         for (x=0; x<MAXX; x++) {
             if ((MonType[Map[x][y].mon.id].flags & FL_GENOCIDED) != 0) {
-                Map[x][y].mon.id = 0; /* no more monster */
+                Map[x][y].mon = NULL_MON;
             }/* if */
         }/* for */
     }/* for */
 }/* checkgen */
 
-
-/* Enlighten a region xrange horizontal characters and yrange vertical
- * characters around the player. */
-void
-enlighten(int xrange, int yrange) {
-    showcellat(UU.x, UU.y, xrange, yrange);
-    update_display(true);
-}/* enlighten*/
 
 /* Search the current map for the coordinates of an object with type
  * 'type'.  Coordinates are stored at *x, *y and true is returned on
@@ -1134,7 +1137,7 @@ cgood(int x, int y, bool itm, bool monst) {
 
     type = Map[x][y].obj.type;
     if (type == OWALL || type == OCLOSEDDOOR)       return false;
-    
+
     if (itm     && !isnone(Map[x][y].obj))          return false;
     if (monst   && Map[x][y].mon.id != NOMONST)     return false;
 
@@ -1142,35 +1145,92 @@ cgood(int x, int y, bool itm, bool monst) {
 }/* cgood*/
 
 
+// Choose a random spot near posX, posY that can be used to hold an
+// item or monster (indicated by passing true as monst or item).  The
+// location is stored in *outX,*outY.  Returns the (rectangular)
+// distance from posX,posY or -1 if no location was found.
+int
+point_near(int posX, int posY, int *outX, int *outY, bool item, bool monst) {
 
-/*
- * createitem(it,arg)   Routine to place an item next to the player int
- * it,arg; 
- *
- * Enter with the item number and its argument (iven[], ivenarg[]) Returns no
- * value, thus we don't know about createitem() failures. 
- *
- */
+    // We search for a location by searching the box surrounding
+    // posX,posY.  If no location is found, we increase the box size
+    // by 1 in each direction and repeat.  We keep doing this until a
+    // spot is found or we exceed the size of the map.
+    //
+    // At each degree of distance (i.e. box size), if there are
+    // multiple available spots, we pick one at random.  We do this by
+    // first selecting a random cell in the search sequence and then
+    // returning the first available cell there or later.  We always
+    // keep the latest available cell so we can use it if there's
+    // nothing valid after the random target.  (This biases the search
+    // a little but that shouldn't affect the game's fairness.)
+
+    for(int radius = 1; radius < MAXX; radius++) {
+        int zonewidth = 2 * radius + 1;
+        int maxSlots = 4 * zonewidth - 2;
+
+        int rndTarget = rnd(maxSlots);  // The target index
+        int lastX = -1, lastY = -1;     // The most-recent empty cell found
+
+        // Check if we've found a valid cell at x,y; if so, exit the
+        // search.  A cell is valid if it can hold the requested thing
+        // and is at or past rndTarget in the search order.  Also
+        // decrements rndTarget.
+#define CHECK(x,y)                                  \
+        if (cgood(x, y, item, monst)) {             \
+            lastX = x;                              \
+            lastY = y;                              \
+            if (rndTarget == 0) { goto found_it; }  \
+        }                                           \
+        if (rndTarget > 0) { --rndTarget; }
+
+        // Search the vertical edges
+        for (int y = posY - radius; y <= posY + radius; y++) {
+            CHECK(posX - radius, y);
+            CHECK(posX + radius, y);
+        }// for
+
+        // Search the horizontal edges
+        for (int x = posX - radius + 1; x <= posX + radius - 1; x++) {
+            CHECK(x, posY - radius);
+            CHECK(x, posY + radius);
+        }// for
+
+#undef CHECK
+
+    found_it:
+
+        if (lastX >= 0 && lastY >= 0) {
+            *outX = lastX;
+            *outY = lastY;
+            return radius;
+        }// if
+
+    }// for
+
+    // There are no free spots available.
+    return -1;
+}// point_near
+
+
+// Create a new item in a free square adjacent to baseX, baseY on the
+// current level.  If no square is available, does nothing.  If item
+// has type ONONE, does nothing.
+//
+// Returns false if the item was created nearby (or not at all), true
+// if no space was found and it was created elsewhere on the level.
 void
-createitem(int baseX, int baseY, int it, int arg) {
-    if (it >= OBJ_COUNT)
-        return;     /* no such object */
+createitem(int baseX, int baseY, struct Object item) {
 
-    // Pick a random direction, then loop around until we find one
-    // that's suitable
-    for (int k = rnd(8), i = 0; i < 8; i++, k++) {
-        if (k > 8) { k = 1; }
+    if (isnone(item)) { return; }
 
-        int x, y;
-        adjpoint(baseX, baseY, k + 1, &x, &y);
-
-        if (cgood(x, y, 1, 0)) { /* if we can create here */
-            Map[x][y].obj = obj(it, arg);
-            Map[x][y].know = 0;
-            return;
-        }/* if */
-    }/* for */
-
+    int x = 0, y = 0;
+    int radius = point_near(baseX, baseY, &x, &y, true, false);
+    if (radius >= 0) {
+        Map[x][y].obj = item;
+    } else {
+        say("You seen an object begin to form, then disappear.\n");
+    }// if
 }/* createitem*/
 
 
@@ -1178,16 +1238,58 @@ createitem(int baseX, int baseY, int it, int arg) {
 // Function to create a random item around coords x y.  Item is chosen
 // randomly but is appropriate for cave level 'lev'.
 void
-something(int x, int y, int lev) {
-    struct Object obj;  // XXX need to fix this interface too
-
-    if (lev < 0 || lev > VBOTTOM)
+create_rnd_item(int x, int y, int lev) {
+    if (lev < 0 || lev > VBOTTOM) {
         return;     /* correct level? */
+    }
 
-    if (rnd(101) < 8)
-        something(x,y,lev);/* possibly more than one item */
+    if (rnd(101) < 8) {
+        create_rnd_item(x,y,lev);/* possibly more than one item */
+    }
 
-    obj = newobject(lev);
-    createitem(x, y, obj.type, (long) obj.iarg);
-}/* something*/
+    createitem(x, y, newobject(lev));
+}/* create_rnd_item*/
 
+
+/*
+ *  function to create a gem on a square near the player
+ */
+void
+creategem () {
+    int i,j;
+
+    switch(rnd(4)) {
+    case 1:
+        i=ODIAMOND;
+        j=50;
+        break;
+    case 2:
+        i=ORUBY;
+        j=40;
+        break;
+    case 3:
+        i=OEMERALD;
+        j=30;
+        break;
+    default:
+        i=OSAPPHIRE;
+        j=20;
+        break;
+    };
+    createitem(UU.x, UU.y, obj(i, rnd(j) + (j / 10)));
+}/* creategem */
+
+
+// Mark the entire map seen/unseen
+void
+set_reveal(bool see) {
+    for (int x=0; x < MAXX; x++) {
+        for (int y=0; y < MAXY; y++) {
+            if (see) {
+                see_at(x, y);
+            } else {
+                forget_at(x, y);
+            }// if .. else
+        }/* for */
+    }/* for */
+}/* map_level*/
