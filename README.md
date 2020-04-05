@@ -70,8 +70,8 @@ Once configuration is done, simply do the standard `make` and `make
 install` in `src/`:
 
     cd src
-    make
-    make install
+    make RELEASE=yes
+    make RELEASE=yes install
 
 And there you go.
 
@@ -82,8 +82,8 @@ You can also build a tar archive containing the playable game.  This
 doesn't need `INST_ROOT` to be set at all.  Simply run make:
 
     cd src
-    make
-    make distbin
+    make RELEASE=yes
+    make RELEASE=yes distbin
 
 This will place the archive in the project root directory.
 
@@ -98,15 +98,9 @@ you will need to add your platform to the list of supported OS-CPU
 pairs in `config.mk`.  It's probably sufficient to copy one of the
 Linux sections.
 
-The Makefile sets the `-Werror` flag which makes all warnings
-fatal.  This enforces better coding style during development but can
-be a problem if you're just trying to play the stupid game; it is safe
-to remove the flag, although you may want to confirm that the warning
-isn't anything terrible.
-
-If it's none of these, you'll need to debug it yourself.  Sorry.  Feel
-free to contact me if you can't get it working or to submit a patch or
-pull request if you do.
+If it's no that, you'll need to debug it yourself.  Sorry.  Feel free
+to contact me if you can't get it working or to submit a patch or pull
+request if you do.
 
 
 ## Contributing

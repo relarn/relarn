@@ -41,7 +41,7 @@ else ifeq ($(SYS),CYGWIN_NT-x86_64)	# 64-bit Cygwin
 else ifeq ($(SYS),Linux-armv7l)		# E.g. Raspbian + Raspberry Pi 
 	CC=gcc
 	LD=gcc
-	PLATFORM_CFLAGS
+	PLATFORM_CFLAGS=
 else ifeq ($(SYS),Darwin-x86_64)	# E.g. macOS + Macintosh
 	CC=gcc
 	LD=gcc

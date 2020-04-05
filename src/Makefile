@@ -5,6 +5,17 @@ include version.mk
 #   Import build configuration
 include config.mk
 
+# Option '-Werror' is really helpful when developing but it causes
+# problems for third parties trying to build from source.  We leave it
+# the default but let the user disable it and update the build
+# instructions to reflect that.
+RELEASE=no
+ifeq ($(RELEASE),no)
+WERROR=-Werror
+else
+WERROR=-Wno-error
+endif
+
 #   Build details, part of the extended version info
 DATE := $(shell date +'(%Y-%m-%d)')
 COMMIT_ID := $(shell git rev-parse --short HEAD)
@@ -21,7 +32,7 @@ LDFLAGS= -g -Wall
 
 #   compile flags
 #   (we use gnu99 instead of c99 in order to get POSIX definitions.)
-CFLAGS= -std=gnu99 -g -Wall -Wno-comment -Werror $(PLATFORM_CFLAGS) \
+CFLAGS= -std=gnu99 -g -Wall -Wno-comment $(WERROR) $(PLATFORM_CFLAGS)   \
 	$(ASSERT_CFLAGS)
 
 #   defines:
