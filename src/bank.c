@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "bank.h"
@@ -6,6 +6,7 @@
 #include "display.h"
 #include "ui.h"
 #include "store.h"
+#include "player.h"
 
 
 static void ointerest(void);
@@ -153,7 +154,7 @@ bankmenu(const char *title) {
         int maxtransfer = deposit ? UU.gold : UU.bankaccount;
         
         snprintf(promptbuf, sizeof(promptbuf), "Balance: %ld GP. %s how much? ",
-                 UU.bankaccount, deposit ? "Deposit" : "Withdraw");
+                 (long)UU.bankaccount, deposit ? "Deposit" : "Withdraw");
         amt = numPrompt(promptbuf, maxtransfer, maxtransfer);
         amt = clamp(amt, 0, maxtransfer);
         if (!amt) {

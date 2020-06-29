@@ -1,21 +1,28 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
-// Support for Unix-style OSs.
+// Os-specific functionality.  All os-dependent stuff is buried here.
 
 #include "os.h"
 
 #include "internal_assert.h"
 #include "map.h"
+#include "ui.h"
+#include "player.h"
+#include "savegame.h"
+#include "game.h"
+
+#ifdef __WIN32__
+#   include "os_windows.h"
+#else
+#   include "os_unix.h"
+#endif
 
 #include <unistd.h>
 #include <fcntl.h>
-#include <sys/stat.h>
 #include <errno.h>
-#include <pwd.h>
-#include <signal.h>
 #include <time.h>
-
+#include <string.h>
 
 // This needs to be defined on the compiler command line
 #ifndef INST_ROOT
@@ -36,92 +43,133 @@
 #define LEVELSNAME      "Umaps"
 #define MAILFILE        "Ujunkmail"
 #define FORTSNAME       "Ufortune"
+#define SAMPLERC        "relarnrc.sample"
+#define ICONNAME        "relarn-icon.bmp"
 
-
-static void setup_signals(void);
-
+//
+// Names of player-side config files
+//
+#define BASE_SAVEDIR    "savegame"
+#define BASE_SAVE       "relarn.sav"
+#define BASE_CFG        "relarnrc"
+#define BASE_MAILBOX    "inbox"
 
 static bool exeIsWritable = false;
 
 
-static void
-make_game_dir_if_needed() {
-    char cfgpath[MAXPATHLEN];
-    snprintf(cfgpath, sizeof(cfgpath), "%s/" BASE_CFGDIR, home());
-    ENSURE_MSG(strlen(cfgpath) < sizeof(cfgpath)-1, "$HOME path is too long.");
+static const char *samplerc_path(void);
 
+
+// Copy a file from src to dest.
+static bool
+copy_file(const char *src, const char *dest) {
+    FILE *srcfh = fopen(src, "rb");
+    if (!srcfh) { return false; }
+
+    FILE *destfh = fopen(dest, "wb");
+    if (!destfh) {
+        fclose(srcfh);
+        return false;
+    }
+
+    bool status = true;
+    for (int c = getc(srcfh); c != EOF; c = getc(srcfh)) {
+        if (fputc(c, destfh) == EOF) {
+            status = false;
+            break;
+        }// if 
+    }// for 
+
+    fclose(srcfh);
+    fclose(destfh);
+        
+    return status;
+}// copy_file
+
+
+// Return the full path to the game's main directory.  On the first
+// call, check if the path exists and attempt to create the directory
+// if not.  It is a fatal error if this can't be done.
+static const char *
+cfgdir() {
+    static char cfgpath[MAXPATHLEN];
+    if (cfgpath[0]) { return cfgpath; }
+
+    // Compute the path and store it in cfgpath
+    snprintf(cfgpath, sizeof(cfgpath), "%s/" BASE_CFGDIR, cfg_root());
+    ENSURE_MSG(strlen(cfgpath) < sizeof(cfgpath)-1,
+               "config path is too long.");
+
+    // If the path now exists, we can return it.
     struct stat sb;
     int statted = !stat(cfgpath, &sb);
-    if (statted && S_ISDIR(sb.st_mode)) { return; }
+    if (statted && S_ISDIR(sb.st_mode)) { return cfgpath; }
 
+    // Otherwise, we try to create the directory.
     ENSURE_MSG(statted == 0, "File '" BASE_CFGDIR "' is not a directory.");
 
-    int mdstat = mkdir(cfgpath, 0755);
+    int mdstat = os_mkdir(cfgpath, 0755);
     if (mdstat) {
-        printf("Error creating '%s': %s", cfgpath, strerror(errno));
+        notify("Error creating '%s': %s", cfgpath, strerror(errno));
         exit(1);
     }// if
 
-    printf("Created '%s'\n", cfgpath);    // DEBUG?
-}// make_game_dir_if_needed
+    say("Created '%s'\n", cfgpath);
+
+    // Attempt to install an initial config file.
+    if( !copy_file(samplerc_path(), cfgfile_path()) ) {
+        say("Error installing sample '%s'.\n", BASE_CFG);
+        say("You can find it in '%s' if you need it.\n", samplerc_path());
+    }// if
+    
+    return cfgpath;
+}// cfgdir
 
 
 void
-init_os(int argc, char *argv[]) {
+init_os(const char *binpath) {
 
     // Create the ~/.relarn directory if not present
-    make_game_dir_if_needed();
-    
+    cfgdir();
+
     // Set canDebug; true if the executable is writable by this user.
-    ASSERT(argc > 0);
-    char *binpath = argv[0];
     exeIsWritable = !access(binpath, W_OK);
 
     setup_signals();
 }
 
-// Return a default player name using the current user's ID
+// Return a default player name using the player's user name as set in
+// the environment.
 const char *
 get_username() {
     static char name[PLAYERNAME_MAX];
     if (name[0]) { return name; }
-    
-    struct passwd *pwe = getpwuid(geteuid());
-    if (!pwe) {
-        fprintf(stderr, "Unable to determine user-ID.\n");
-        exit(1);
-    }/* if */
 
-    strncpy(name, pwe->pw_name, sizeof(name) - 1);
-    name[sizeof(name)-1] = 0;
+    const char *env_name = getenv(ENV_USER);
+    if (!env_name || !env_name[0]) {
+        env_name = "Mysterio";
+    }
+
+    strncpy(name, env_name, sizeof(name) - 1);
+    name[sizeof(name) - 1] = 0;
+
+    // Filter out any tricky characters (esp. tab)
+    for (char* c = name; *c; c++) {
+        if (!isgraph(*c)) {
+            *c = ' ';
+        }// if
+    }// for
 
     return name;
-}/* init_os*/
+}
 
-
-/* Return whether debugging (i.e "wizard mode") is allowed.  On Unixy
- * platforms, this is true if the executable is writable by the
- * current user. */
+/* Return whether debugging is allowed.  On Unixy platforms, this is
+ * true if the executable is writable by the current user; for
+ * Windows, we use an environment variable.  */
 bool
 canDebug() {
-    return exeIsWritable;    
+    return exeIsWritable || os_win_debug();
 }// canDebug
-
-
-const char*
-home() {
-    static char home[MAXPATHLEN];
-    if (home[0]) { return home; }
-
-    char *env_home = getenv("HOME");
-    ENSURE_MSG(env_home && *env_home, "$HOME is unset.");
-
-    strncpy(home, env_home, sizeof(home));
-    home[sizeof(home) - 1] = 0;
-    ENSURE_MSG(strlen(home) < sizeof(home) - 1, "$HOME path is too long.");
-    
-    return home;
-}// home
 
 
 // Determine the installation root; this is either from the
@@ -133,8 +181,8 @@ inst_root() {
     if (!root) {
         const char *env_root = getenv(VAR_PATH);
         root = (env_root && *env_root) ? xstrdup(env_root) : INST_ROOT;
-    }// if 
-    
+    }// if
+
     return root;
 }// inst_root
 
@@ -148,12 +196,17 @@ make_path(char *dest, size_t dest_size, const char *root, const char *subpath,
     snprintf(dest, dest_size, "%s/%s/%s", root, subpath, file);
     ENSURE_MSG(strlen(dest) < dest_size - 1, "Expected filepath is too long!");
 
+    // If the file part was empty, we remove the trailing slash
+    if (!*file) {
+        dest[strlen(dest) - 1] = '\0';
+    }// if
+
     return dest;
 }// make_path
 
 static const char *
 make_cfgdir_path(char *dest, size_t dest_size, const char *file) {
-    return make_path(dest, dest_size, home(), BASE_CFGDIR, file);
+    return make_path(dest, dest_size, cfg_root(), BASE_CFGDIR, file);
 }// make_cfgdir_path
 
 
@@ -189,6 +242,19 @@ help_path() {
 }// help_path
 
 const char *
+icon_path() {
+    static char path[MAXPATHLEN];
+    return make_path(path, sizeof(path), inst_root(), LIB_SUBPATH, ICONNAME);
+}// help_path
+
+static const char *
+samplerc_path() {
+    static char path[MAXPATHLEN];
+    return make_path(path, sizeof(path), inst_root(), LIB_SUBPATH, SAMPLERC);
+}// help_path
+
+
+const char *
 scoreboard_path() {
     static char path[MAXPATHLEN];
     return make_path(path, sizeof(path), inst_root(), VAR_SUBPATH, SCORENAME);
@@ -196,12 +262,48 @@ scoreboard_path() {
 
 
 
-
-
 const char *
-savefile_path() {
+cfgdir_path() {
     static char path[MAXPATHLEN];
-    return make_cfgdir_path(path, sizeof(path), BASE_SAVE);
+    return make_cfgdir_path(path, sizeof(path), "");
+}// cfgdir_path
+
+
+static void
+make_savedir_if_absent() {
+    static bool check_done = false;
+
+    // Only check once per execution
+    if (check_done) { return; }
+    check_done = true;
+
+    // We assume the main .relarn dir has already been created.
+    char path[MAXPATHLEN];
+    snprintf(path, sizeof(path), "%s/%s", cfgdir(), BASE_SAVEDIR);
+
+    // If the savedir already exists, we're done.
+    struct stat sb;
+    int statted = !stat(path, &sb);
+    if (statted && S_ISDIR(sb.st_mode)) { return; }
+
+    // Otherwise, we try to create the directory, quitting on error.
+    int mdstat = os_mkdir(path, 0755);
+    if (mdstat) {
+        notify("Error creating '%s': %s", path, strerror(errno));
+        exit(1);
+    }// if
+}// make_savedir_if_absent
+
+
+
+// Get path to savefile.  Also creates savedir if not present.
+static const char *
+savefile_path() {
+    make_savedir_if_absent();
+
+    static char path[MAXPATHLEN];
+    return make_path(path, sizeof(path), cfg_root(),
+                     BASE_CFGDIR "/" BASE_SAVEDIR, BASE_SAVE);
 }// savefile_path
 
 static const char *
@@ -231,27 +333,31 @@ mailfile_path() {
 
 
 // Return the user-id, caching locally to save a bit of overhead.
-long
+const char *
 get_user_id() {
-    static bool uid_set = false;
-    static long uid;
+    static char uid[OS_UID_STR_MAX];
 
-    if (uid_set) { return uid; }
-    
-    uid = (long)geteuid();
-    uid_set = true;
+    if (!uid[0]) {
+        os_get_user_id(uid, sizeof(uid));
+    }// if
 
     return uid;
 }// get_user_id
 
-static bool
+// Makes the current save the (latest?) backup.
+bool
 rotate_save() {
     const char *sp = savefile_path();
-
+    const char *bp = backup_savefile_path();
+    
     // If no save file is present, there's nothing to do.
     if (access(sp, F_OK) != 0) { return true; }
 
-    return rename(sp, backup_savefile_path()) == 0;
+    // Windows doesn't let you rename a file onto an existing file so
+    // we unlink it first.
+    os_unlink(bp);
+
+    return rename(sp, bp) == 0;
 }// rotate_save
 
 
@@ -259,15 +365,22 @@ enum SAVE_STATUS
 save_game() {
     const char *sp = savefile_path();
 
+    // This should never happen, but we test for it here in case
+    // something has gone dramatically wrong.
+    if (!stashed_game_present()) {
+        notify("Savegame buffer is empty; not saving!");
+        return SS_FAILED;
+    }
+    
     bool moveSuccess = rotate_save();
 
     FILE *fh = fopen(sp, "wb");
     if (!fh) { return SS_FAILED; }
-    
-    int status = savegame_to_file(fh);
+
+    int status = save_stashed_game_to_file(fh);
 
     fclose(fh);
-    
+
     if (!status) {
         return SS_FAILED;
     }
@@ -281,10 +394,16 @@ static enum SAVE_STATUS
 load_savefile(const char *sp) {
     FILE *fh = fopen(sp, "rb");
     if (!fh) { return SS_NO_SAVED_GAME; }
-    
+
     bool wrongVersion = false;
-    bool status = restore_from_file(fh, &wrongVersion);
+    bool status = load_stashed_game_from_file(fh, &wrongVersion);
     fclose(fh);
+
+    // This is overkill but the conditional means that a failed load
+    // won't overwrite the current game.
+    if (status == SS_SUCCESS) {
+        restore_global_game_state();
+    }
     
     if (wrongVersion) {
         return SS_INCOMPATIBLE_SAVE;
@@ -297,6 +416,8 @@ load_savefile(const char *sp) {
 enum SAVE_STATUS
 restore_game() {
     const char *path = savefile_path();
+
+    // Load the game
     enum SAVE_STATUS status = load_savefile(path);
 
     // If the savefile failed, look for a backup and delete the
@@ -307,11 +428,13 @@ restore_game() {
             unlink(path);
             status = SS_USED_BACKUP;
         }
-    } else {
-        // Otherwise, rotate the save file to backup
-        rotate_save();
-    }// if 
+    }// if
 
+    // And finish the setup.
+    if (ss_success(status)) {
+        post_restore_processing();
+    }
+    
     return status;
 }// restore_game
 
@@ -323,123 +446,38 @@ delete_save_files() {
 
 
 
-// Maintain a flag indicating that it's safe to autosave. This should
-// only be true while waiting for user input.
-static bool
-access_safety_flag(bool set, bool val) {
-    volatile static bool safe_to_save = false;
-    if (set) {
-        ASSERT(safe_to_save != val);
-        safe_to_save = val;
-    }// if 
 
-    return safe_to_save;
-}
 
-// Enable/disable/test the emergency autosave flag. The caller must
-// ensure that this is true only when the game state is coherent
-// (e.g. while waiting for the player's input at the start of a turn).
-void enable_emergency_save() { access_safety_flag(true, true); }
-void disable_emergency_save() { access_safety_flag(true, false); }
-bool safe_to_emergency_save() { return access_safety_flag(false, false); }
-    
-
+// Locks the file at 'fh'.  This must be called IMMEDIATELY after
+// opening the file (i.e. before any other file operations have been
+// performed).  It will block until a lock has been obtained.
 //
-// Signal Stuff
-//
+// It returns true on success and false on failure, although that's
+// not necessarily really useful.  We mostly assume that it's going to
+// work and that the consequences of failure are pretty small.
+bool
+lock_file(FILE *fh) {
+    int fnum = fileno(fh);
+    int status = os_lockf(fnum);
 
-// ULarn used to catch everything and do a bunch of stuff with
-// it. I've gotten rid of most of those because the defaults already
-// generally do the right thing.
-//
-// The only case where we catch now is if it's possible to save the
-// game before quitting.
-
-
-
-// Note: Signals are part of ANSI-C but have very minimal defined
-// behaviour. We are assuming something sufficiently Unix-like here.
-// 
-// Unix does signals differently across platforms, which is also a
-// source of endless amusement, but we bypass most of that here by
-// quitting after getting a signal so the differences don't really
-// matter.
-//
-// If you wish to do anything more clever, you need to be much more
-// careful.  You are probably better off using sigaction(); it has
-// much better-defined semantics.
-
-
-// Handler for graceful-exit signals
-static void
-exit_by_signal(int sig) {
-
-    // Disable all signals so that nothing interrupts the cleanup
-    sigset_t mask;
-    sigemptyset(&mask);
-    sigprocmask(SIG_SETMASK, &mask, NULL);
-
-    // Save the current game if that's enabled.
-    bool savedGame = false;
-    if (safe_to_emergency_save()) {
-        enum SAVE_STATUS ss = save_game();
-        savedGame = ss_success(ss);
-    }
-
-    // Restore stdout to a normal console
-    teardown_ui();
-
-    // Report the error to the user
-    printf("Caught signal %d; game %s saved!\n", sig,
-           savedGame ? "successfully" : "NOT");
-
-    // And quit
-    exit(1);
-}// exit_by_signal
-
-
-
-static void
-setup_signals() {
-    // Polite exit; typically sent via 'kill'
-    signal(SIGTERM, exit_by_signal);    
-
-    // Polite exits via terminal keystrokes, which are disabled by
-    // ncurses. These are here just in case.
-    signal(SIGINT, exit_by_signal);
-    signal(SIGQUIT, exit_by_signal);
-
-    // Exit via terminal disconnection (or console window close).
-    signal(SIGHUP, exit_by_signal);
-}// setup_signals
-
-
-// Takes an advisory lock on 'path'.  Does not return until the lock
-// is owned.  Returns an int that should be 
-LOCK_HANDLE
-lock_file(const char *path) {
-    int fh = open(path, O_RDWR);
-    if (fh < 0) { return fh; }
-
-    int status = lockf(fh, F_LOCK, 0);
     if (status != 0) {
-        close(fh);
-        return -1;
+        notify("Error obtaining file lock: %s\n", strerror(errno));
+        return false;
     }
 
-    return fh;
+    return true;
 }// lock_file
 
 
+// Unlock a file previously locked iwth lock_file().
 void
-unlock_file(LOCK_HANDLE fh) {
-    if (fh < 0) { return; } // Tolerate invalid/closed handles.
-
-    int stat = lockf(fh, F_ULOCK, 0);
-    if (stat) {
+unlock_file(FILE *fh) {
+    int fnum = fileno(fh);
+    int status = os_unlockf(fnum);
+    if (status != 0) {
         // We can't do more than issue a warning at this point.
-        perror("Error unlocking file:");
-    }// if 
+        notify("Error unlocking file: %s", strerror(errno));
+    }// if
 }// unlock_scorefile
 
 

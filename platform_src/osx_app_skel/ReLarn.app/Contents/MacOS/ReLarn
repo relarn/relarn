@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Launch script for Finder to use.
+
+set -e
+
+app_dir=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/" ; pwd)
+
+if [ -f "$app_dir/bin/relarn" ]; then
+    exec bash $app_dir/bin/relarn
+else
+    osascript -e "display notification \"No ReLarn present\" with title \"Error!!!\""
+    exit 1
+fi

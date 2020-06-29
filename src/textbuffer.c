@@ -1,8 +1,9 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
 #include "internal_assert.h"
+#include "util.h"
 
 #include "textbuffer.h"
 
@@ -16,7 +17,11 @@ static char *dropLast(struct TextBuffer *tb);
 
 
 
-/* Create and initialize a TextBuffer */
+/* Create and initialize a TextBuffer.  length is the number of lines;
+ * if INF_BUFFER, the buffer can be arbitrarily increased; otherwise,
+ * old rows drop off once the limit has been reached.  (This lets us
+ * use a TextBuffer for the console window and not worry about running
+ * out of memory on a really long game.) */
 struct TextBuffer *
 tb_malloc(int length, int linewidth) {
     struct TextBuffer *result;
@@ -30,7 +35,7 @@ tb_malloc(int length, int linewidth) {
     result->max_lines = length;
     result->max_width = linewidth;
 
-    return result; 
+    return result;
 }/* tb_malloc*/
 
 
@@ -46,7 +51,7 @@ tb_free(struct TextBuffer *tb) {
     for (n = 0; n < tb->num_lines; n++) {
         free(tb->text[n]);
     }/* for */
-    
+
     free (tb->text);
 
     free(tb);
@@ -55,11 +60,11 @@ tb_free(struct TextBuffer *tb) {
 
 /* Append text to the end of the buffer, scrolling up if needed.
  * Splits on newlines.  'line' only ends the line if it ends with a
- * newline.  */
+ * newline. */
 void
 tb_append(struct TextBuffer *tb, const char *line) {
     if (!*line) return;
-        
+
     splitAndAppend (tb, line);
     scrollBuffer(tb);
 }/* tb_append*/
@@ -84,21 +89,28 @@ tb_appendline(struct TextBuffer *tb, const char *line) {
 
 /* Return a pointer to a string in the end of the buffer.  The string
  * should not be modified in any way.  This is used to show the last
- * windowSize lines in a scrolling window.  Currently no way to scroll
- * back--FIX. */
+ * windowSize lines in a scrolling window ending scrollback lines from
+ * the end of the buffer.
+ */
 const char *
-tb_getlastn(struct TextBuffer *tb, int index, int windowSize) {
+tb_getlastn(struct TextBuffer *tb, int index, int scrollback, int windowSize) {
     ASSERT(index < windowSize);
 
-    if (windowSize < tb->num_lines) {
-        return tb->text[index + (tb->num_lines - windowSize)];
-    }/* if */
+    // Limit scrollback to the the ranges that make sense
+    scrollback = min(scrollback, tb->num_lines - windowSize);
+    scrollback = max(scrollback, 0);
 
-    if (index > tb->num_lines - 1) {
-        return "";
-    }/* if */
+    // Find the index of the bottom-most item to display
+    int bottom = max(windowSize, tb->num_lines - scrollback);
 
-    return tb->text[index];
+    // Find the actual index in tb->text corresponding to index and
+    // scrollback.
+    int real_index = index + (bottom - windowSize);
+    if (real_index >= tb->num_lines) { return ""; }
+    ASSERT(real_index >= 0);
+
+    // Aaaaaaand, return the line
+    return tb->text[real_index];
 }/* tb_getlastn*/
 
 
@@ -153,7 +165,7 @@ splitAndAppend(struct TextBuffer *tb, const char *line) {
 static char *
 mk_lastline(struct TextBuffer *tb, const char *line) {
     int llen;
-    char *linedup, *lastline;
+    char *linedup = NULL, *lastline = NULL;
     bool setNewline = false;
 
     llen = strlen(line);
@@ -241,8 +253,8 @@ appendSegment (struct TextBuffer *tb, char *line) {
             line[n] = ' ';
         }/* if */
     }/* for */
-        
-    
+
+
     linecopy = xstrdup(line);
 
     ++tb->num_lines;
@@ -293,14 +305,14 @@ scrollBuffer (struct TextBuffer *tb) {
     /* Adjust num_lines and null-terminate tb->text */
     tb->num_lines -= scrollAmt;
     tb->text[tb->num_lines] = NULL;
-}// scrollBuffer 
+}// scrollBuffer
 
 // Reposition all lines so that they're centered.
 void
 tb_center_all(struct TextBuffer *tb) {
     for (int n = 0; n < tb->num_lines; n++) {
         size_t len = strlen(tb->text[n]);
-        
+
         if (len >= tb->max_width - 1) { continue; }
 
         char *line = xmalloc(tb->max_width + 1);
@@ -309,6 +321,19 @@ tb_center_all(struct TextBuffer *tb) {
                  tb->text[n]);
         free(tb->text[n]);
         tb->text[n] = line;
-    }// for 
+    }// for
 }// tb_center_all
 
+
+// Delete the last character of the last line if the last line is not
+// empty.
+void
+tb_backspace_last_line(struct TextBuffer *tb) {
+    if (!tb->num_lines) { return; }
+
+    char *last = tb->text[tb->num_lines - 1];
+    size_t llen = strlen(last);
+    if (llen > 0) {
+        last[llen - 1] = 0;
+    }
+}// tb_backspace_last_line

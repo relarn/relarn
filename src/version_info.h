@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // This header contains the release version number.  It also provides
@@ -7,6 +7,8 @@
 
 #ifndef HDR_VERSION_INFO_H
 #define HDR_VERSION_INFO_H
+
+#include <stdio.h>
 
 // Version and patchlevel are stored in version.mk and set by the
 // makefile.
@@ -44,8 +46,8 @@ inline static const char *version_str() {
     const char *bd = BUILD_DATE, *cid = COMMIT_ID;
     snprintf(buffer, sizeof(buffer), "%s.%s%s%s%s%s",
              VERSION, PATCHLEVEL,
-             bd ? " " : "", bd,
-             cid ? " " : "", cid);
+             *bd ? " " : "", bd,
+             *cid ? " " : "", cid);
     return buffer;
 }
 

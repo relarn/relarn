@@ -34,7 +34,7 @@ Explorers' Guild of Larn
               
                       [retrieving ${wealth_gp}]
 
-                    [slaying the God of Hellfire]
+                    [${slaying} the God of Hellfire]
 
   on this date, [${date}], and has so earned membership in the
         Explorers' Guild of Larn with [${score}] Club Points.

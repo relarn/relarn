@@ -1,9 +1,11 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "show.h"
 
 #include "internal_assert.h"
+#include "picklist.h"
+#include "ui.h"
 
 #include "game.h"
 
@@ -20,7 +22,7 @@ inv_line(int index, enum PRICEMODE pricemode) {
 
     strncpy(result, knownobjname(obj), sizeof(result));
 
-    if (iswieldable(obj) && (GS.wizardMode || obj.iarg != 0)) {
+    if (iswieldable(obj) && (UU.wizardMode || obj.iarg != 0)) {
         char enbuf[30];
         snprintf(enbuf, sizeof(enbuf), " %+d", (int)Invent[index].iarg);
         strncat(result, enbuf, sizeof(result) - 1);
@@ -124,7 +126,7 @@ list_known() {
 
     pl_add(picker, 0, 0, "Spells:");
     for (int n = 0; n < SPNUM; n++) {
-        if (GS.spellknow[n]) {
+        if (UU.spellknow[n]) {
             char buffer[80];
             snprintf(buffer, sizeof(buffer), "%*s%s", INDENT, "", Spells[n].name);
             pl_add(picker, 0, 0, buffer);
@@ -137,7 +139,7 @@ list_known() {
 
         unsigned long mask = section == 0 ? OA_SCROLL : OA_POTION;
         for (int n = 0; n < OBJ_CONCRETE_COUNT; n++) {
-            if ( (Types[n].flags & mask) && Types[n].isKnown ) {
+            if ( (Types[n].flags & mask) && knows_obj(n) ) {
                 char buffer[80];
                 snprintf(buffer, sizeof(buffer), "%*s%s", INDENT, "",
                          Types[n].shortdesc);

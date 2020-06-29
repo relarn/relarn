@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "debug.h"
@@ -33,6 +33,7 @@ enum DBG_CMD {
     DC_CREATEALL,
     DC_ALLSPELLS,
     DC_RAISESTATS,
+    DC_ALLBUFFS,
     DC_MAPLEVEL,
     DC_ID,
     DC_SETTAX,
@@ -62,12 +63,12 @@ db_makeobjs () {
          obj_id < OBJ_CONCRETE_COUNT;
          x += xi, y += yi, obj_id++) {
 
-        Map[x][y].obj = obj(obj_id, 0);
+        at(x, y)->obj = obj(obj_id, 0);
 
         if (y >= MAXY - 1 && x == 0) {
             xi = 1;
             yi = 0;
-        } 
+        }
         else if (x >= MAXX - 1 && y >= MAXY - 1) {
             xi = 0;
             yi = -1;
@@ -88,7 +89,7 @@ static void
 dbg_allspells() {
     int i;
     for (i=0; i<SPNUM; i++) {
-        GS.spellknow[i] = true;
+        UU.spellknow[i] = true;
     }/* for */
 }/* dbg_allspells*/
 
@@ -97,15 +98,6 @@ static void
 raise_stats() {
     raise_min(70);
 }
-
-static void
-identify_all() {
-    int i;
-    for (i = 0; i < OBJ_CONCRETE_COUNT; i++) {
-        Types[i].isKnown = true;
-    }/* for */
-}/* identify_all*/
-
 
 
 static void
@@ -125,7 +117,7 @@ gear_up() {
             break;
         }/* if */
     }/* for */
-    
+
     UU.wear = UU.shield = -1;
     take(obj(OORB, 0), "");
 }/* gear_up*/
@@ -133,7 +125,7 @@ gear_up() {
 
 static void
 debugmode() {
-    GS.wizardMode = true;
+    UU.wizardMode = true;
 
     raise_stats();
     gear_up();
@@ -194,7 +186,7 @@ do_create_monster() {
     char name[80];
     enum MONSTER_ID id = 0;
     int n;
-    
+
     if (!stringPrompt("Monster map symbol? ", name, sizeof(name))) {
         say("Cancelled!\n");
         return;
@@ -212,7 +204,7 @@ do_create_monster() {
         return;
     }/* if */
 
-    say("createmonster(%d)\n", id);
+    say("createmonster(%d) (%c, %s)\n", id, *name, MonType[id].name);
     createmonster(id);
 }/* do_create_monster*/
 
@@ -261,7 +253,7 @@ debug_teleport() {
     level = numPrompt("Which level do you wish to teleport to? ", 0, 20);
     if (level > 20 || level < 0) {
         say(" Cancelled!\n");
-        return; 
+        return;
     }
 
     say("\n");
@@ -269,7 +261,26 @@ debug_teleport() {
     teleport(false, level);
 }// debug_teleport
 
-
+static void
+dbg_allbuffs() {
+    UU.stealth          += 200;
+    UU.undeadpro        += 200;
+    UU.spiritpro        += 200;
+    UU.charmcount       += 200;
+    UU.timestop         += 20;      // Complicates stuff so it's short
+    UU.holdmonst        += 200;
+    UU.giantstr         += 200;
+    UU.fireresistance   += 200;
+    UU.dexCount         += 200;
+    UU.strcount         += 200;
+    UU.scaremonst       += 200;
+    UU.hasteSelf        += 200;
+    UU.cancellation     += 200;
+    UU.invisibility     += 200;
+    UU.altpro           += 200;
+    UU.protectionTime   += 200;
+    UU.wtw              += 200;
+}// dbg_allbuffs
 
 static enum DBG_CMD
 dbg_select() {
@@ -289,6 +300,7 @@ dbg_select() {
         {DC_CREATEOBJ,  "Create an object."},
         {DC_CREATEALL,  "Create one of each object."},
         {DC_ALLSPELLS,  "Learn all spells."},
+        {DC_ALLBUFFS,   "Enable all buffs."},
         {DC_RAISESTATS, "Raise all stats to 70."},
         {DC_MAPLEVEL,   "Reveal the current level."},
         {DC_ID,         "Identify all items."},
@@ -308,7 +320,7 @@ dbg_select() {
     for (n = 0; labels[n].desc; n++) {
         pl_add(picker, labels[n].cmd, 'a'+n, labels[n].desc);
     }
-    
+
     if (!pick_item(picker, desc, &result)) return DC_NOTHING;
     return result;
 }/* dbg_select*/
@@ -339,8 +351,8 @@ void debugmenu() {
         break;
 
     case DC_WIZARD:
-        GS.wizardMode = !GS.wizardMode;
-        say("%s wizard mode.\n", GS.wizardMode ? "Enabled" : "Disabled");
+        UU.wizardMode = !UU.wizardMode;
+        say("%s wizard mode.\n", UU.wizardMode ? "Enabled" : "Disabled");
         break;
 
     case DC_CREATEMON:
@@ -353,6 +365,10 @@ void debugmenu() {
 
     case DC_ALLSPELLS:
         dbg_allspells();
+        break;
+
+    case DC_ALLBUFFS:
+        dbg_allbuffs();
         break;
 
     case DC_RAISESTATS:
@@ -395,10 +411,9 @@ void debugmenu() {
     case DC_MAIL:
         if ( !write_emails() ) { say("Error creating junk mail.\n"); }
         break;
-        
+
     default:
         return;
     }/* switch*/
 
 }/* debugmenu*/
-

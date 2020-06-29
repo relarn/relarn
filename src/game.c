@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "game.h"
@@ -18,13 +18,11 @@
 #include "bill.h"
 #include "version_info.h"
 #include "look.h"
-
-
+#include "player.h"
+#include "ui.h"
+#include "savegame.h"
 
 #define AUTOSAVE_INTERVAL 100       // TODO: make this user-configurable
-
-
-struct GameState GS = { 80, false };
 
 
 static bool player_action(char key);
@@ -34,6 +32,9 @@ static void play_turn(void);
 /* Initialize the player using user input. */
 void
 makeplayer () {
+    bool nointro = GameSettings.nointro;
+
+
     /* Set the name, gender, spouse's gender and character class
      * unless all of them have already been set. */
     if (!GameSettings.nameSet ||
@@ -49,6 +50,10 @@ makeplayer () {
             graceful_exit("Never mind...");
         }// if
 
+        // If the player has manually created a character, we're going
+        // to show them the welcome screen regardless.
+        nointro = false;
+
         // Not really necessary but leaves the struct in a consistent
         // state.
         GameSettings.nameSet = true;
@@ -60,6 +65,10 @@ makeplayer () {
                     GameSettings.gender,
                     GameSettings.spouseGender,
                     GameSettings.difficulty);
+
+    if (!nointro) {
+        welcome();   /* welcome the player to the game */
+    }
 }/* makeplayer */
 
 
@@ -75,19 +84,26 @@ void
 mainloop() {
     unsigned long action_count = 0;   // used for autosave
 
+    // Initial stat mod update
+    recalc();
+
     while (1) {
+        stash_game_state();
+
         onemove(DIR_CANCEL);
 
         ++action_count;
         if (action_count % AUTOSAVE_INTERVAL == 0) {
             enum SAVE_STATUS ss = save_game();
-            if (GS.wizardMode || !ss_success(ss)) {
-                say("Autosave%s (%d)\n",
-                    (ss_success(ss) ? "d" : " failed!"), (int)ss);
+            if (UU.wizardMode || !ss_success(ss)) {
+                say("Autosave%s%s\n",
+                    (ss_success(ss) ? "d" : " failed!"),
+                    ss == SS_RENAME_FAILED ? " (rename failed)" : "");
             }// if
         }// if
     }
 }/* mainloop*/
+
 
 
 // Perform one turn.  There are two cases for this: normal gameplay
@@ -95,14 +111,11 @@ mainloop() {
 // to a direction of movement and the game behaves as if the player
 // had selected that direction.
 //
-//  Monster move is disabled if noMonMove is true.
+// Monster move is disabled if noMonMove is true.
 bool
 onemove(DIRECTION dir) {
     bool running = (dir != DIR_CANCEL && dir != DIR_STAY);
     bool missedTurn = (dir == DIR_STAY);    // Paralysis, etc.
-
-    /* Update player stat modifications due to carried/worn stuff. */
-    recalc();
 
     /* Update field of view and show changes. */
     see_and_update_fov();
@@ -122,6 +135,9 @@ onemove(DIRECTION dir) {
     /* regenerate hp and spells */
     regen();
 
+    // Update player stat modifications due to carried/worn stuff.
+    recalc();
+
     /* Create new monsters if appropriate. */
     randmonst();
 
@@ -131,17 +147,14 @@ onemove(DIRECTION dir) {
         bool foundSomething;
         foundSomething = lookforobject();
 
-        // Finding a thing might update some stats so we recalculate
-        // here.
         if (foundSomething) {
-            recalc();
+            recalc();       // Recalculate in case this changes a stat
             update_display();
 
             /* If we find something while running, stop now BEFORE the
              * move.  This way, the player regains control while still on
              * the thing.*/
             if (running) {
-                cancel_look(); /* Prevent another lookforobject() on the retry. */
                 return false;
             }// if
         }// if
@@ -166,10 +179,7 @@ play_turn () {
     int key;
 
     do {
-        // It is safe to save the game while waiting for player input.
-        enable_emergency_save();
         key = map_getch();
-        disable_emergency_save();
     } while (!player_action(key));
 }/* play_turn */
 
@@ -177,7 +187,7 @@ play_turn () {
 static void
 show_inventory() {
     char title[80];
-    snprintf(title, sizeof(title), "Inventory\n\nGold: $%ld", UU.gold);
+    snprintf(title, sizeof(title), "Inventory\n\nGold: $%ld", (long)UU.gold);
     inv_pick(title, 0, PRM_NONE);
 }/* show_inventory*/
 
@@ -192,7 +202,6 @@ player_action(char key) {
     // block on input, meaning there's a good chance we'll be there if
     // a SIGINT arrives.
 
-    enable_emergency_save();
     switch(key) {
     case 'i':
         show_inventory();
@@ -222,6 +231,18 @@ player_action(char key) {
         quit();
         break; /* quit */
 
+    case 'o':
+        showscores(true);
+        break;
+
+    case 16:    /* ^P */
+        scroll_back();
+        break;
+
+    case 14:    /* ^N */
+        scroll_forward();
+        break;
+
     case 12:    /* ^R */
     case 18:    /* ^L */
         redraw();
@@ -230,7 +251,6 @@ player_action(char key) {
     default:
         success = true;
     }// switch
-    disable_emergency_save();
 
     // If one of the previous cases was reached, update and return.
     if (!success) {
@@ -300,7 +320,7 @@ player_action(char key) {
     case 'q':
         if (UU.timestop == 0) {
             quaff();
-        }// if 
+        }// if
         break; /* quaff a potion */
 
     case 'd':
@@ -324,7 +344,7 @@ player_action(char key) {
         break; /* to eat a fortune cookie */
 
     case 'S':
-        say("Saving . . .");
+        say("Saving . . .\n");
         save_and_quit();
         break;
 
@@ -346,14 +366,14 @@ player_action(char key) {
             for (i=UU.x-1; i<UU.x+2; i++) {
                 if (i < 0) i=0;
                 if (i >= MAXX) break;
-                switch(Map[i][j].obj.type) {
+                switch(at(i, j)->obj.type) {
                 case OTRAPDOOR:
                 case ODARTRAP:
                 case OTRAPARROW:
                 case OTELEPORTER:
                 case OELEVATORUP:
                 case OELEVATORDOWN:
-                    say("It's %s\n", objname(Map[i][j].obj));
+                    say("It's %s\n", objname(at(i, j)->obj));
                     count++;
                 };
             }
@@ -406,7 +426,7 @@ void
 save_and_quit() {
     enum SAVE_STATUS ss = save_game();
     if (!ss_success(ss)) {
-        say("Error saving game. Not quitting.");
+        say("Error saving game! Not quitting!\n");
         return;
     }
 
@@ -416,8 +436,48 @@ save_and_quit() {
 }// save_and_quit
 
 
+volatile static bool enable_emergency_exit = true;
 
-// Shut down the UI and exit with a message.
+// Switch off emergency saving at exit.  To be used when exiting
+// normally.
+void
+cancel_emergency_save() {
+    enable_emergency_exit = false;
+}
+
+// Save on unexpected exit (including window-close on SDL)
+void
+emergency_save() {
+    if (!enable_emergency_exit ||
+        stash_op_in_progress() || !stashed_game_present()) {
+        return;
+    }
+
+    save_game();
+}// emergency_save
+
+
+// Update stuff that wasn't saved from the current game.  Called after
+// a restore.
+void
+post_restore_processing() {
+
+    // There used to be a check for UU.hp <= 0 but that can't happen
+    // anymore.
+
+    // closedoor() in action.c calls cancel_look() to stop the player
+    // being asked to re-open a door they just closed.  However, if
+    // they save the game before moving off that square, this state is
+    // lost.  We restore it here.
+    if (at(UU.x, UU.y)->obj.type == OCLOSEDDOOR) {
+        cancel_look();
+    }/* if */
+}// post_restore_processing
+
+
+
+// Shut down the UI and exit with a message.  Note that some platforms
+// won't print the message.
 void
 graceful_exit(const char *msg) {
     teardown_ui();
@@ -425,6 +485,7 @@ graceful_exit(const char *msg) {
         printf("%s\n", msg);
     }// if
 
+    cancel_emergency_save();
     exit(0);
 }// graceful_exit
 
@@ -459,7 +520,12 @@ compute_score(bool won) {
     }// if
 
     // Bonus for graduating ULarn
-    score += graduated(&UU) ? score * 0.1 : 0;
+    score += graduated() ? score * 0.1 : 0;
+
+    // Bonus for killing the Big Bad (aka the God of Hellfire)
+    if (UU.killedBigBad) {
+        score += 50000;
+    }// if
 
     // Finally, the challenge level becomes a score multiplier
     score *= 1.0 + (double)UU.challenge/5.0;
@@ -537,13 +603,13 @@ game_over_probably(unsigned cause) {
     if (UU.lifeprot > 0 && !unrecoverable(cause)) {
         --UU.lifeprot;
         UU.hp = 1;
-        --UU.constitution;
-        say("You feel wiiieeeeerrrrrd all over! ");
+        constitution_adjust(-1);
+        say("You feel wiiieeeeerrrrrd all over!\n");
         return;
     }// if
 
     // Wizards only die by choice.
-    if (GS.wizardMode) {
+    if (UU.wizardMode) {
         bool really = confirm(cause == DDWINNER ?
                               "Really finish?"  :
                               "Really die?");
@@ -588,6 +654,9 @@ game_over_probably(unsigned cause) {
         tb_append(msg, buffer);
     }// if .. else
 
+    if (UU.killedBigBad && (cause == DDWINNER || cause == DDTOOLATE)) {
+        tb_append(msg, "You defeated the God of Hellfire in combat.\n\n");
+    }// if
 
     tb_append(msg,
               "The Adventurer's Guild has bestowed you with the title of:\n\n");
@@ -595,9 +664,9 @@ game_over_probably(unsigned cause) {
     tb_append(msg, "\n\n");
 
     snprintf(buffer, sizeof(buffer),
-             "Final Score: %ld\nDifficulty: %d\n"
+             "Final Score: %ld\n"
              "Experience Level: %d\n",
-             score, UU.challenge, UU.level);
+             score, UU.level);
     tb_append(msg, buffer);
     tb_append(msg, "\n\n\nThe End\n\n\n");
 
@@ -607,20 +676,32 @@ game_over_probably(unsigned cause) {
     tb_free(msg);
 
 
-    // Remaining output (if any) is just printed.
-    teardown_ui();
-
-    /*  Now enter the player at the end of the scoreboard.
+    /*  Now enter the player at the end of the scoreboard and display
+     *  the scores.
+     *
+     *  Since this is the last thing that happens before UI teardown,
+     *  we wait until afterward to display an error message if there's
+     *  an error here.
      *
      *  We skip this if wizard is enabled (but recall that wizard !=
      *  debug mode; it is up to developers to use Wizard Mode to keep
      *  from corrupting the communal scoreboard.) */
-    if ( !GS.wizardMode ) {
-        bool success = newscore(score, cause == DDWINNER, getlevel(),
-                                cause_desc(cause), &UU);
-        if (!success) {
-            printf("Error saving your score; score not saved.\n");
-        }// if
+    bool wrote_score_file = true;
+    if ( !UU.wizardMode ) {
+        wrote_score_file = newscore(score, cause == DDWINNER, getlevel(),
+                                    cause_desc(cause), &UU);
+    }// if
+
+    if (wrote_score_file) {
+        showscores(true);
+    }// if
+
+    // Shut down the UI.
+    teardown_ui();
+
+    // And warn the user of a problem updating the score file.
+    if (!wrote_score_file) {
+        notify("Error saving your score; score not saved.\n");
     }// if
 
     // Send the official junk mail.
@@ -630,12 +711,15 @@ game_over_probably(unsigned cause) {
             launch_client();
         } else {
             // Hah hah.
-            printf("ERROR: The mail daemon was exorcised!\n");
+            notify("Error delivering your email: mailer daemon got exorcised."
+                   "\n");
         }// if .. else
     }// if
 
     delete_save_files();
 
     printf("GAME OVER\n");
+
+    cancel_emergency_save();
     exit(0);
 }/* game_over_probably*/

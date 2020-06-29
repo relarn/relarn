@@ -1,16 +1,20 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
-
-#include <curses.h>
 
 #include "internal_assert.h"
 #include "display.h"
 #include "settings.h"
+#include "version_info.h"
+#include "player.h"
 
 #include "ui.h"
 
-#define DEFAULT_ESC_DELAY 50   // Time in milliseconds to wait after ESC char
+#include "curses_extensions.h"
+
+#include <curses.h>
+#include <math.h>
+#include <time.h>
 
 #define ESC '\033'
 #define CTRL_N 14
@@ -23,10 +27,13 @@
 
 enum ColorPairs {
     CLR_PLAYER = 1,
-    CLR_INVIS = 2,
-    CLR_EFFECT = 3,
-    CLR_UNSEEN = 4,
-    CLR_FOV = 5,
+    CLR_INVIS,
+    CLR_EFFECT,
+    CLR_UNSEEN,
+    CLR_UNSEEN_DARK,
+    CLR_FOV,
+    CLR_FOV_DARK,
+    CLR_FOV_TOWN,
 
     // Debug colors
     CLR_DBG1, CLR_DBG2, CLR_DBG3, CLR_DBG4,
@@ -35,9 +42,11 @@ enum ColorPairs {
 
 static bool pick_backend(struct PickList *pl, const char *headings[],
                          int hcount, bool *selections, bool multi);
-
+static void backspace(void);
 
 static struct TextBuffer *ConsoleBuffer = NULL;
+static int ScrollbackPos = 0;
+
 static WINDOW *ConsoleWin = NULL;
 static WINDOW *IndWin = NULL;
 static WINDOW *MapWin = NULL;
@@ -52,14 +61,28 @@ static const int IndHeight = MAXY;
 static const short StatsY = MAXY;
 static const short StatsHeight = 2;
 
-static void update_msg(void);
 
+// Normalize the keycode corresponding to the ENTER key.  That is,
+// Replace any of the three(?) keycodes that can be interpreted as a
+// RETURN or ENTER as '\n'.
+static int
+norm_return(int key) {
+    if (key == KEY_ENTER || key == '\n' || key == '\r') { return '\n'; }
+    return key;
+}
+
+
+// Test if 'key' should be interpreted as backspace.
+static bool
+is_backspace(int key) {
+    return key == KEY_BACKSPACE || key == KEY_DC || key == 127 || key == 8;
+}
 
 // Rotating colors as a debugging aid
 static void
 debugCycleBackground (WINDOW *win) {
     static int curr = 0;
-    static int COLORS[] = {
+    static int DBG_COLORS[] = {
         CLR_DBG1, CLR_DBG2, CLR_DBG3, CLR_DBG4,
         CLR_DBG5, CLR_DBG6, CLR_DBG7,
     };
@@ -67,15 +90,44 @@ debugCycleBackground (WINDOW *win) {
     // Do nothing unless debugging is enabled
     if (!GameSettings.drawDebugging) { return; }
 
-    curr = rund(sizeof(COLORS)/sizeof(chtype));
-    wattrset(win, COLOR_PAIR(COLORS[curr]));
+    curr = rund(sizeof(DBG_COLORS)/sizeof(chtype));
+    wattrset(win, COLOR_PAIR(DBG_COLORS[curr]));
 }// getDbgClr
 
 
 
+static void
+set_clr(short id, struct Color clr) {
+    if (!clr.isSet) { return; }
+
+    short r = (short)round( (double)(clr.r) * 1000.0/ 0xFF );
+    short g = (short)round( (double)(clr.g) * 1000.0/ 0xFF );
+    short b = (short)round( (double)(clr.b) * 1000.0/ 0xFF );
+
+    init_color(id, r, g, b);
+}// set_clr
+
+static void
+set_requested_colors() {
+    if (!can_change_color()) { return; }
+
+    set_clr(COLOR_BLACK,    GameSettings.black);
+    set_clr(COLOR_RED,      GameSettings.red);
+    set_clr(COLOR_GREEN,    GameSettings.green);
+    set_clr(COLOR_YELLOW,   GameSettings.yellow);
+    set_clr(COLOR_BLUE,     GameSettings.blue);
+    set_clr(COLOR_MAGENTA,  GameSettings.magenta);
+    set_clr(COLOR_CYAN,     GameSettings.cyan);
+    set_clr(COLOR_WHITE,    GameSettings.white);
+}// set_requested_colors
+
+
 void
 init_ui() {
-    ASSERT(!ConsoleBuffer && !ConsoleWin && !IndWin);
+    ASSERT(!ConsoleWin && !IndWin);
+
+    // Set up stuff specific to the curses implemention we're using
+    setup_curses_preconditions();
 
     initscr();
     raw();
@@ -83,19 +135,29 @@ init_ui() {
     curs_set(0);
     keypad(stdscr, true);
 
-    if (!getenv("ESCDELAY")) {
-        set_escdelay(DEFAULT_ESC_DELAY);
-    }
+    // Set up more stuff specific to the curses implemention we're
+    // using that needs to be done *after* initscr() is called.
+    setup_curses_extensions();
 
     if (has_colors()) {
         start_color();
+
         use_default_colors();
+
+        set_requested_colors();
+
         init_pair(CLR_PLAYER, COLOR_RED, -1);
         init_pair(CLR_INVIS, COLOR_CYAN, -1);
         init_pair(CLR_EFFECT, COLOR_CYAN, -1);
-        init_pair(CLR_UNSEEN, -1, COLOR_WHITE);
-        init_pair(CLR_FOV, -1, COLOR_YELLOW);
 
+        // Colour(s) for undiscovered map squares
+        setup_unseen_area_colors(CLR_UNSEEN, CLR_UNSEEN_DARK);
+
+        init_pair(CLR_FOV_DARK, COLOR_BLACK, COLOR_YELLOW);
+        init_pair(CLR_FOV, -1, COLOR_YELLOW);
+        init_pair(CLR_FOV_TOWN, COLOR_BLACK, COLOR_GREEN);
+
+        // These are used for display debugging
         init_pair(CLR_DBG1, -1, COLOR_RED);
         init_pair(CLR_DBG2, -1, COLOR_GREEN);
         init_pair(CLR_DBG3, -1, COLOR_YELLOW);
@@ -104,11 +166,6 @@ init_ui() {
         init_pair(CLR_DBG6, -1, COLOR_CYAN);
         init_pair(CLR_DBG7, -1, COLOR_WHITE);
     }/* if */
-
-    ConsoleBuffer = tb_malloc (
-        300,
-//CONSOLE_H,
-        SCREEN_W);
 
     ConsoleWin = newwin(CONSOLE_H, SCREEN_W, CONSOLE_Y, 0);
     scrollok(ConsoleWin, true);
@@ -169,48 +226,116 @@ sync_ui(bool force) {
 }/* sync_ui*/
 
 
+// Write out a line of text to the StatsWin window.  If '^' is
+// encountered, modify the text (either bold or reverse) until '|' is
+// found.  This is used to hilight changed stats on the display.
+static void
+write_stats_line(const char *line) {
+    chtype mod = 0;
+    for (int n = 0; line[n]; n++) {
+        chtype c = line[n];
+        if (c == '^') {
+            mod = GameSettings.hilightReverse ? A_REVERSE : A_BOLD;
+        } else if (c == '|') {
+            mod = 0;
+        } else {
+            waddch(StatsWin, c | mod);
+        }
+    }
+}
+
+
+struct StatDisp {
+    long value;
+    time_t age;
+};
+
+// Return '^' or '|' (hilight or don't highlight) depending on whether
+// the item in `stati[*ndx]` is different from `value` or has changed
+// in the last few seconds.  (This is used to highlight changed
+// stats.)
+static char
+hl(struct StatDisp stati[], size_t *ndx, long value, bool disable) {
+    time_t now = time(NULL);
+
+    if (value != stati[*ndx].value) {
+        stati[*ndx].age = GameSettings.hilightTime + now;
+        stati[*ndx].value = value;
+    }
+
+    if (disable) {
+        stati[*ndx].age = 0;
+    }
+
+    char result =  stati[*ndx].age > now ? '^' : '|';
+    ++*ndx;
+    return result;
+}// hl
+
+// Display the stats in StatsWin, temporarily highlighting those that
+// changed.
 void
-showstats(const struct Player *p, bool iswiz, bool force) {
-    bool hidefloor = p->teleflag && !iswiz;
+showstats(bool iswiz, bool force) {
+    bool hidefloor = !lev()->known;
+
+    static struct StatDisp stati[20];  // oversize
+    size_t n = 0;
+    static bool disable = true;
+
+    // Macro to produce a pair of arguments: the highlight character
+    // for the stat to determine whether it should be highlighted
+    // followed by the actual value cast to long.
+#define STATPAIR(s) hl(stati, &n, s, disable), (long)(s)
 
     char line1[120];
     snprintf(line1, sizeof(line1),
-             "Spells:%3ld(%2ld) AC:%-3ld WC:%-3ld LV:%-2d %s:%-4ld Exp: %-9ld %s",
-             p->spells, p->spellmax,
-             p->cached_ac, p->cached_wc, p->level,
-             iswiz ? "Trns": "Time", iswiz ? p->gtime : p->gtime / MOBUL,
-             p->experience, levelDesc(p->level));
+             "Spells:%3ld(%c%2ld|) AC:%c%-3ld| WC:%c%-3ld| LV:%c%-2ld| %s:%-4ld"
+             " Exp: %-9ld %s",
+             (long)UU.spells,
+
+             STATPAIR(UU.spellmax),
+             STATPAIR(stat_val(&UU.defense)),
+             STATPAIR(weaponclass()),
+             STATPAIR(UU.level),
+
+             iswiz ? "Trns": "Time",
+             iswiz ? (long)UU.gtime : (long)(UU.gtime / MOBUL),
+             (long)UU.experience, levelDesc(UU.level));
 
     char buf[20], line2[120];
-    snprintf(buf, sizeof(buf), "%ld (%ld)", p->hp, p->hpmax);
+    snprintf(buf, sizeof(buf), "%d (%c%ld|)",
+             (int)UU.hp,
+             STATPAIR(UU.hpmax));
+
     snprintf(line2, sizeof(line2),
-             "HP: %11s STR=%-2ld INT=%-2ld WIS=%-2ld CON=%-2ld DEX=%-2ld "
-             "CHA=%-2ld LV:%2s%s Gold: %-8ld",
-             buf, p->strength+p->strextra, p->intelligence,
-             p->wisdom, p->constitution, p->dexterity, p->charisma,
+             "HP: %11s STR=%c%-2ld| INT=%c%-2ld| WIS=%c%-2ld| CON=%c%-2ld| "
+             "DEX=%c%-2ld| CHA=%c%-2ld| LV:%2s%s Gold: %-8ld",
+             buf,
+
+             STATPAIR(stat_val(&UU.strength)),
+             STATPAIR(stat_val(&UU.intelligence)),
+             STATPAIR(stat_val(&UU.wisdom)),
+             STATPAIR(stat_val(&UU.constitution)),
+             STATPAIR(stat_val(&UU.dexterity)),
+             STATPAIR(stat_val(&UU.charisma)),
+
              hidefloor ? " ?" : getlevelname(),
              iswiz ? " W" : "  ",
-             p->gold);
+             (long)UU.gold);
 
+#undef STATPAIR
+
+    ASSERT(n < sizeof(stati) / sizeof(stati[0]));
 
     debugCycleBackground(StatsWin);
 
-    // Skip drawing the update if the stats haven't changed. (We could
-    // do each line separately but for now I'm skipping that to avoid
-    // the extra complexity.)
-    static char prevline1[sizeof(line1)], prevline2[sizeof(line2)];
-    if (!force && strcmp(line1,prevline1) == 0 && strcmp(line2,prevline2) == 0){
-        return;
-    }// if
-
     wmove(StatsWin, 0, 0);
-    wprintw(StatsWin, "%s", line1);
+    write_stats_line(line1);
 
     wmove(StatsWin, 1, 0);
-    wprintw(StatsWin, "%s", line2);
+    write_stats_line(line2);
 
-    strcpy(prevline1, line1);
-    strcpy(prevline2, line2);
+    disable = false;
 }/* showstats*/
 
 
@@ -233,50 +358,103 @@ map_getch() {
 }// map_getch
 
 
+struct MapAttrs {
+    chtype effect;          // Visual effects (e.g. magic missile)
+    chtype obj;             // Objects on the map
+    chtype player;          // The player
+    chtype player_inv;      // The player when invisible
+    chtype notseen;         // An undiscovered location
+    chtype fov;             // The current field of view
+    chtype fov_town;        // The town looks much nicer
+};
+
+// Attributes for light-background screens
+static struct MapAttrs
+brightAttrs() {
+    struct MapAttrs attr;
+
+    memset(&attr, 0, sizeof(attr));
+
+    attr.effect =        A_REVERSE|A_DIM|COLOR_PAIR(CLR_EFFECT);
+    attr.obj =           A_REVERSE;
+    attr.player =        A_REVERSE|COLOR_PAIR(CLR_PLAYER);
+    attr.player_inv =    A_REVERSE|COLOR_PAIR(CLR_INVIS);
+
+    attr.notseen = GameSettings.showUnrevealed
+        ? COLOR_PAIR(CLR_UNSEEN)
+        : 0;
+
+    attr.fov = GameSettings.showFoV
+        ? A_BOLD|COLOR_PAIR(CLR_FOV)
+        : 0;
+
+    attr.fov_town = GameSettings.showFoV
+        ? A_BOLD|COLOR_PAIR(CLR_FOV_TOWN)
+        : 0;
+
+    return attr;
+} // brightAttrs
+
+static struct MapAttrs
+darkAttrs() {
+    struct MapAttrs attr;
+
+    memset(&attr, 0, sizeof(attr));
+
+    attr.effect =        A_REVERSE|A_DIM|COLOR_PAIR(CLR_EFFECT);
+    attr.obj =           A_REVERSE;
+    attr.player =        A_REVERSE|COLOR_PAIR(CLR_PLAYER);
+    attr.player_inv =    A_REVERSE|COLOR_PAIR(CLR_INVIS);
+
+    attr.notseen = GameSettings.showUnrevealed
+        ? COLOR_PAIR(CLR_UNSEEN_DARK)
+        : 0;
+
+    attr.fov = GameSettings.showFoV
+        ? COLOR_PAIR(CLR_FOV_DARK)
+        : 0;
+
+    attr.fov_town = GameSettings.showFoV
+        ? A_BOLD|COLOR_PAIR(CLR_FOV_TOWN)
+        : 0;
+
+    return attr;
+} // darkAttrs
+
+
+
 /* Display one character on the map. */
 void
-mapdraw(int x, int y, char sym, enum MAPFLAGS flags) {
-    chtype symbol = sym;
-
+mapdraw(int x, int y, char sym, enum MAPFLAGS flags, bool inFoV, bool isTown) {
     ASSERT(x >= 0 && y >= 0 && x < MapWidth && y < MapHeight);
 
+    // Set of modifiers for displaying map squares; depends on screen
+    // settings.
+    static struct MapAttrs attrs;
+    static bool mods_initialized = false;
+    if (!mods_initialized) {
+        attrs = GameSettings.darkScreen ? darkAttrs() : brightAttrs();
+    }
+
+    // FOV flags if requested
+    const chtype fov =
+        !inFoV              ? 0 :
+        isTown              ? attrs.fov_town :
+                              attrs.fov;
+    chtype symbol = sym;
+
     switch(flags) {
-    case MF_EFFECT:
-        symbol |= A_REVERSE|A_DIM|COLOR_PAIR(CLR_EFFECT);
-        break;
+    case MFL_EFFECT:     symbol |= attrs.effect;         break;
+    case MFL_OBJ:        symbol |= fov|attrs.obj;        break;
+    case MFL_PLAYER:     symbol |= attrs.player;         break;
+    case MFL_PLAYER_INV: symbol |= attrs.player_inv;     break;
+    case MFL_NOTSEEN:    symbol |= attrs.notseen;        break;
 
-    case MF_OBJ:
-        symbol |= A_REVERSE;
-        break;
-
-    case MF_PLAYER:
-        symbol |= A_REVERSE|COLOR_PAIR(CLR_PLAYER);
-        break;
-
-    case MF_PLAYER_INV:
-        symbol |= A_REVERSE|COLOR_PAIR(CLR_INVIS);
-        break;
-
-    case MF_NOTSEEN:
-        if (GameSettings.showUnrevealed) {
-            symbol |= A_DIM|COLOR_PAIR(CLR_UNSEEN);
-        }
-        break;
-
-    case MF_FOV:
-        if (GameSettings.showFoV) {
-            symbol |= COLOR_PAIR(CLR_FOV);
-        }
-        break;
-
-    case MF_DEFAULT:
-        /* Do nothing. */
-        break;
+    case MFL_DEFAULT:    symbol |= fov;                  break;
     }/* switch*/
 
-    // This should only happen once per update, so this will
-    // (hopefully) remain useful while not turning the screen into an
-    // unreadable mess.
+    // Display debug functionality: randomize the drawing colour when
+    // we reach the player position.
     if (x == UU.x && y == UU.y) {
         debugCycleBackground(MapWin);
     }
@@ -396,22 +574,19 @@ showpages_prompt(struct TextBuffer *tb, bool prompt) {
         for (;;) {
             int i;
 
-            i = wgetch(win);
+            i = norm_return( wgetch(win) );
 
             // If space, advance to next page
             if (i == ' ' && currline < tb->num_lines) { break; }
 
-            // Detecting the enter/return key is a bit complicated...
-            bool is_enter = i == KEY_ENTER || i == '\n' || i == '\r';
-
             // If just displaying, look for an exit
             if (!prompt) {
-                if (is_enter || i == ESC) { goto finished; }
+                if (i == '\n' || i == ESC) { goto finished; }
                 continue;
             }// if
 
             // Return true or false, depending confirmation.
-            if (i == 'y' || is_enter) {
+            if (i == 'y' || i == '\n') {
                 confirm = true;
                 goto finished;
             }
@@ -741,7 +916,7 @@ pick_backend(struct PickList *pl, const char *headings[], int hcount,
 
     while (true) {
         bool selected = false;
-        int key = wgetch(parent);
+        int key = norm_return( wgetch(parent) );
 
         /* Handle literal keys separately. */
         switch(key) {
@@ -860,7 +1035,7 @@ fullscreen_prompt(const char *prompt, char *result, size_t resultLen) {
         wmove(win, editline_y, left + 1 + end);
 
         curs_set(2);        // show cursor
-        int key = wgetch(win);
+        int key = norm_return( wgetch(win) );
         curs_set(0);        // hide it again
 
         if (key == 12 || key == 18) { // ^R or ^L
@@ -874,7 +1049,7 @@ fullscreen_prompt(const char *prompt, char *result, size_t resultLen) {
             break;
         }
 
-        if (key == KEY_BACKSPACE || key == KEY_DC || key == 127 || key == 8) {
+        if (is_backspace(key)) {
             if (end > 0) {
                 --end;
                 result[end] = 0;
@@ -1073,7 +1248,7 @@ quickinv(const char *action, const char *candidates, bool dashForNone,
             if (ch == candidates[n]) return ch;
         }
 
-        say("Invalid!");
+        say("Invalid! ");
     }/* for */
 }/* quickinv*/
 
@@ -1093,14 +1268,22 @@ stringPrompt(const char *question, char *result, size_t maxSize) {
     say("%s", question);
 
     for (index = 0; index < maxSize - 1;) {
-        c = cursor_getch();
+        c = norm_return( cursor_getch() );
+
+       if (is_backspace(c)) {
+           if (index > 0) {
+               backspace();
+               --index;
+           }
+           continue;
+       }// if
 
         if (c == ESC) {
             result[0] = 0;
             return false;
         }/* if */
 
-        if (c == '\n' || c == '\r') {
+        if (c == '\n') {
             say("\n");
             break;
         }/* if */
@@ -1120,9 +1303,9 @@ promptToContinue() {
     say("Press ENTER, ESCAPE or SPACE to continue:");
 
     while(true) {
-        char c = wgetch(ConsoleWin);
+        char c = norm_return( wgetch(ConsoleWin) );
 
-        if (c == ESC || c == '\n' || c == '\r' || c == ' ') {
+        if (c == ESC || c == '\n' || c == ' ') {
             return;
         }/* if */
     }/* for */
@@ -1208,6 +1391,7 @@ promptdir(bool allowCancel) {
         }/* switch */
     }/* while */
 
+    say("\n");
     return dir;
 }
 
@@ -1256,7 +1440,7 @@ billboard(bool center, const char *heading, ...) {
 // move the cursor to the end of the last non-empty line written. (We
 // do this so that the cursor is in the right place when prompting.)
 static void
-update_msg() {
+update_msg(bool force_redraw) {
     static int last_update_line = 0;
 
     debugCycleBackground(ConsoleWin);
@@ -1265,7 +1449,9 @@ update_msg() {
     // AND it's the start of a new line, we use the scroller and add
     // just the line.  This is relatively low-hanging fruit when
     // optimizing for network use.
-    if (tb_newline(ConsoleBuffer) &&
+    if (!force_redraw &&
+        ScrollbackPos == 0 &&
+        tb_newline(ConsoleBuffer) &&
         tb_total_lines(ConsoleBuffer) - last_update_line == 1) {
         int ypos = tb_num_lines(ConsoleBuffer) - 1;
 
@@ -1274,7 +1460,7 @@ update_msg() {
             ypos = CONSOLE_H - 1;
         }
 
-        const char *line = tb_getlastn(ConsoleBuffer, 0, 1);
+        const char *line = tb_getlastn(ConsoleBuffer, 0, 0, 1);
         mvwaddnstr(ConsoleWin, ypos, 0, line, SCREEN_W);
 
         goto done;
@@ -1285,7 +1471,7 @@ update_msg() {
 
     int lastx = 0, lasty = 0;
     for (int n = 0; n < CONSOLE_H; n++) {
-        const char *line = tb_getlastn(ConsoleBuffer, n, CONSOLE_H);
+        const char *line = tb_getlastn(ConsoleBuffer,n,ScrollbackPos,CONSOLE_H);
         mvwaddnstr(ConsoleWin, n, 0, line, SCREEN_W);
         if (*line) {
             lastx = strlen(line);
@@ -1302,9 +1488,38 @@ done:
 
 
 void
+scroll_back() {
+    if (!ConsoleBuffer ||
+        ScrollbackPos >= tb_num_lines(ConsoleBuffer) - CONSOLE_H
+        )
+    {
+        return;
+    }
+
+    ++ScrollbackPos;
+    update_msg(true);
+}// scroll_back
+
+void
+scroll_forward() {
+    if (!ConsoleBuffer || ScrollbackPos <= 0) { return; }
+
+    --ScrollbackPos;
+    update_msg(true);
+}// scroll_forward
+
+void
 say(const char *fmt, ...) {
     va_list ap; /* pointer for variable argument list */
     char buf[5 * 80];
+
+    // We initialize this lazily so that say() can be used before the
+    // UI is set up.
+    if (!ConsoleBuffer) {
+        ConsoleBuffer = tb_malloc (
+            300,
+            SCREEN_W);
+    }// if
 
     va_start(ap, fmt);
     vsnprintf(buf, sizeof(buf), fmt, ap);
@@ -1312,8 +1527,29 @@ say(const char *fmt, ...) {
 
     tb_append(ConsoleBuffer, buf);
 
-    update_msg();
+    // If say() was called before UI initialization, we skip the
+    // update.
+    if (ConsoleWin) {
+        bool force = (ScrollbackPos != 0);
+        ScrollbackPos = 0;      // Undo any scrolling.
+        update_msg(force);
+    }// if
 }/* say*/
+
+// Delete the last character of the last line in the display
+static void
+backspace() {
+    ASSERT(ConsoleBuffer && ConsoleWin);
+
+    tb_backspace_last_line(ConsoleBuffer);
+
+    // We just redraw everything.  This could be optimized but it
+    // happens rarely enough that I'm not going to worry about it
+    // right now.
+
+    ScrollbackPos = 0;      // Undo any scrolling.
+    update_msg(true);
+}// backspace
 
 
 // Update the visible display of active effects (e.g. stealth).  If
@@ -1323,30 +1559,30 @@ say(const char *fmt, ...) {
 // (Currently, it skips redrawing if no effects have changed since the
 // last call.)
 void
-show_indicators(const struct Player *uu, bool force) {
+show_indicators(bool force) {
     static uint32_t last_update = (uint32_t)(-1);
 
     struct {
         bool show;
         const char *label;
     } indicators [] = {
-        {!!uu->stealth,         "Stealth"},
-        {!!uu->undeadpro,       "Undead Pro"},
-        {!!uu->spiritpro,       "Spirit Pro"},
-        {!!uu->charmcount,      "Charm"},
-        {!!uu->timestop,        "Time Stop"},
-        {!!uu->holdmonst,       "Hold Monst"},
-        {!!uu->giantstr,        "Giant Str"},
-        {!!uu->fireresistance,  "Fire Resist"},
-        {!!uu->dexCount,        "Dexterity"},
-        {!!uu->strcount,        "Strength"},
-        {!!uu->scaremonst,      "Scare"},
-        {!!uu->hasteSelf,       "Haste Self"},
-        {!!uu->cancellation,    "Cancel"},
-        {!!uu->invisibility,    "Invisible"},
-        {!!uu->altpro,          "Protect 3"},
-        {!!uu->protectionTime,  "Protect 2"},
-        {!!uu->wtw,             "Wall-Walk"},
+        {!!UU.stealth,         "Stealth"},
+        {!!UU.undeadpro,       "Undead Pro"},
+        {!!UU.spiritpro,       "Spirit Pro"},
+        {!!UU.charmcount,      "Charm"},
+        {!!UU.timestop,        "Time Stop"},
+        {!!UU.holdmonst,       "Hold Monst"},
+        {!!UU.giantstr,        "Giant Str"},
+        {!!UU.fireresistance,  "Fire Resist"},
+        {!!UU.dexCount,        "Dexterity"},
+        {!!UU.strcount,        "Strength"},
+        {!!UU.scaremonst,      "Scare"},
+        {!!UU.hasteSelf,       "Haste Self"},
+        {!!UU.cancellation,    "Cancel"},
+        {!!UU.invisibility,    "Invisible"},
+        {!!UU.altpro,          "Shielded"},
+        {!!UU.protectionTime,  "Protected"},
+        {!!UU.wtw,             "Wall-Walk"},
 
         // Note: must be less than 32 items so that the initial
         // last_update will never equal the current this_update.
@@ -1376,12 +1612,10 @@ show_indicators(const struct Player *uu, bool force) {
 }/* show_indicators*/
 
 
-
-
-
-/* routine to pause for n milliseconds */
+/* routine to pause for n milliseconds.  Also forces an update. */
 void
 nap(int x) {
+    update_display();
     if (x <= 0 || GameSettings.nonap) return;
     napms(x);
 }/* nap*/
@@ -1389,7 +1623,27 @@ nap(int x) {
 // Flash the screen to get the user's attention
 void
 headsup() {
+    update_display();
     if (!GameSettings.nobeep) {
         flash();
     }// if
 }// headsup
+
+
+// Print a message (presumably an error report of some kind) without
+// using the UI.  This is typically used when the UI hasn't been
+// initialized via init_ui() or after it's been torn down via
+// teardown_ui().  We prefer this to regular printf because some
+// platforms don't provide stdout.
+void
+notify(const char *fmt, ...) {
+    va_list ap; /* pointer for variable argument list */
+
+    char buffer[512];
+
+    va_start(ap, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, ap);
+    va_end(ap);
+
+    show_notification_msg(buffer);
+}

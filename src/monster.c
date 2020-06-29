@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -9,11 +9,12 @@
 #include "movem.h"
 #include "show.h"
 #include "game.h"
+#include "ui.h"
 
 #include "monster.h"
 
 /* Create the big list of monster types: */
-struct MonstTypeData MonType[] = {
+const struct MonstTypeData MonType[] = {
 #define MONSTER(id,sym,lv,ac,dmg,attack,intl,gold,hp,exp,flags,longdesc) \
     {longdesc, sym, lv, ac, dmg, attack, intl, gold, hp, exp, flags},
 #include "monster_list.h"
@@ -21,12 +22,26 @@ struct MonstTypeData MonType[] = {
 };
 
 static bool spattack(enum SP_ATTACK attack, int xx, int yy);
-static bool verifyxy(int *x, int *y);
 static void dropsomething (int x, int y, int mon_id);
 static void rustattack(const char *monster);
 
 
+// Return default monster hitpoints adjusted for challenge level
+short
+mon_hp(uint8_t id) {
+    ASSERT(id <= LAST_MONSTER);
+    return min(0xFFFF,  ((6 + UU.challenge) * MonType[id].hitpoints + 1) / 6);
+}
 
+// Return the experience gained from killing a monster of type 'id'
+// adjusted for the challenge level.
+int
+mon_exp(uint8_t id) {
+    ASSERT(id <= LAST_MONSTER);
+    return max_l( 1, (7 * MonType[id].experience) / (7 + UU.challenge) + 1);
+}// mon_hp
+
+// Avoids pits
 bool
 avoidspits(struct Monster mon) {
     return MonType[mon.id].flags & FL_NOPIT;
@@ -36,46 +51,54 @@ avoidspits(struct Monster mon) {
 /* Test if mon can *not* be seen by the player. */
 bool
 cantsee(struct Monster mon) {
-    return (isdemon(mon) && !UU.eyeOfLarn) ||
+    return (isdemon(mon) && !UU.hasTheEyeOfLarn) ||
         (!UU.seeinvisible && (monflags(mon) & FL_INVISIBLE));
 }/* return */
 
 
 // Create a monster of type 'mon' next to the player.
 void
-createmonster(int mon) {
+createmonster(enum MONSTER_ID mon) {
     createmonster_near(mon, UU.x, UU.y);
 }// createmonster
 
 // Create a monster of type 'mon' NEXT TO the point at pos_x, pos_y.
 void
-createmonster_near(int mon, int pos_x, int pos_y) {
-    int k, i;
+createmonster_near(enum MONSTER_ID mon, int pos_x, int pos_y) {
+    ASSERT(mon >= 1 && mon <= LAST_MONSTER);
 
-    if (mon < 1 || mon > LAST_MONSTER) {    // this should really be an ASSERT
-        headsup();
-        say("can't createmonst(%d)\n\n", (long) mon);
-        nap(3000);
-        return;
+    // Advance if banished
+    while (is_banished(mon) && mon < MAXCREATURE) {
+        mon++;
     }
 
-    while ((MonType[mon].flags & FL_GENOCIDED) != 0 && mon < MAXCREATURE)
-        mon++;      /* genocided? */
+    // We pick a direction at random and see if we can place a
+    // creature there.  If not, we advance and try again, repeating
+    // until all adjacent squares have been tried.
+    //
+    // Since advancing by 1 tends to bias for the first free square in
+    // the search order if the player is mostly surrounded, we advance
+    // by either 3 or 5.  (These are relatively prime to 8 and so will
+    // cycle through all possible values.)
+    int index = rund(8);
+    int offset = rnd(1) ? 3 : 5;    // Needs to be prime wrt. num directions
+    for (int i = 0; i < 8; i++) {
+        DIRECTION dir = DIR_MIN_DIR + index;
 
-    /* choose direction, then try all */
-    for (k = rnd(8), i = -8; i < 0; i++, k++) {
-        if (k > 8) { k = 1; }  /* wraparound the diroff arrays */
+        // Try direction 'dir'
+        int8_t x = 0, y = 0;
+        adjpoint(pos_x, pos_y, dir, &x, &y);
 
-        int x, y;
-        adjpoint(pos_x, pos_y, k, &x, &y);
-
-        /* if we can create here */
+        // if we can create here, do so and quit
         if (cgood(x, y, 0, 1)) {
-            Map[x][y].mon = mk_mon(mon);
-            Map[x][y].mon.awake = (mon == ROTHE || mon == POLTERGEIST ||
+            at(x, y)->mon = mk_mon(mon);
+            at(x, y)->mon.awake = (mon == ROTHE || mon == POLTERGEIST ||
                                    mon == VAMPIRE);
             return;
         }/* if */
+
+        // Advance by an amount
+        index = (index + offset) % 8;
     }/* for */
 }// createmonster_near
 
@@ -94,13 +117,10 @@ fullhit(int rollval) {
     if (wielding(OLANCE))
         return 10000; /* lance of death */
 
-    dmg = rollval * (
-        (UU.cached_wc >> 1)
-                     + UU.strength
-                     + UU.strextra
+    dmg = rollval * ((weaponclass() >> 1)
+                     + strength()
                      - UU.challenge
-                     - 12
-                     + UU.moreDmg);
+                     - 12);
 
     return ((dmg >= 1) ? dmg : rollval);
 }// fullhit
@@ -110,8 +130,8 @@ fullhit(int rollval) {
  * the player is blind, in which case it's just the word "monster". */
 const char *
 monname_at(int x, int y) {
-    VXY(x, y);      /* verify correct x,y coordinates */
-    return monname(Map[x][y].mon.id);
+    if (!inbounds(x,y)) { return "monster"; }   // Probably can't happen.
+    return monname(at(x, y)->mon.id);
 }// monname_at
 
 
@@ -125,43 +145,6 @@ monname(uint8_t id) {
 
 
 
-
-
-/*
- * Routine to verify/fix coordinates for being within bounds
- *
- * Function to verify x & y are within the bounds for a level If *x or *y is not
- * within the absolute bounds for a level, fix them so that they are on the
- * level. Returns true if it was out of bounds, and the *x & *y in the
- * calling routine are affected.
- *
- * TODO: merge this and the VXY macro.
- */
-static bool
-verifyxy(int *x, int *y) {
-    bool changed = false;
-
-    if (*x < 0) {
-        *x = 0;
-        changed = true;
-    }
-    if (*y < 0) {
-        *y = 0;
-        changed = true;
-    }
-    if (*x >= MAXX) {
-        *x = MAXX - 1;
-        changed = true;
-    }
-    if (*y >= MAXY) {
-        *y = MAXY - 1;
-        changed = true;
-    }
-    return changed;
-}/* verifyxy*/
-
-
-
 /*
  * Function to hit a monster at the designated coordinates.
  *
@@ -170,82 +153,100 @@ verifyxy(int *x, int *y) {
  * (x,y).
  */
 void
-hitmonster(int x, int y) {
-    int damag, didhit;
-    const char *mname;
+hit_mon_melee(int x, int y) {
+    int damag;
 
     if (UU.timestop) { return; }     /* not if time stopped */
 
-    VXY(x, y);      /* verify coordinates are within range */
+    if (!inbounds(x, y)) { return; } // This should be an assert.
 
-    int monst = Map[x][y].mon.id;
-    if (!monst) { return; }
+    struct Monster monst = at(x, y)->mon;
+    if (!ismon(monst)) { return; }
 
-    mname = monname_at(x,y);
+    bool lemming_instakill = monst.id == LEMMING && !annoying_lemmings();
 
-    int to_hit_max = max(-127, MonType[monst].armorclass - UU.challenge)
+    const char *mname = monname_mon(monst);
+
+    int to_hit_max = max(-127, mon_ac(monst) - UU.challenge)
         + UU.level
-        + UU.dexterity
-        + UU.cached_wc/4 - 12
+        + dexterity()
+        + weaponclass()/4 - 12
         - UU.challenge;
 
     /* need at least random chance to hit */
-    if (rnd(20) < to_hit_max || rnd(71) < 5) {
-        didhit = 1;
-        damag = fullhit(1);
-        if (damag < 9999)
-            damag = rnd(damag) + 1;
-    } else {
-        didhit = 0;
+    bool didhit = false;
+    if (lemming_instakill || rnd(20) < to_hit_max || rnd(71) < 5) {
+        didhit = true;
+        damag = fullhit(1);     // will always kill a lemming
+        if (damag < 9999) { damag = rnd(damag) + 1; }
     }
     say("You %s the %s.\n", didhit ? "hit" : "missed", mname);
 
-    /*
-     *  If the monster was hit, deal with weapon dulling.
-     */
-    if (didhit && (monst==RUSTMONSTER || monst==DISENCHANTRESS || monst==CUBE)
-        && UU.wield > 0) {
-        /* if it's not already dulled to hell */
-        if (((Invent[UU.wield].iarg > -10) &&
-             ((Invent[UU.wield].type == OSLAYER) ||
-              (Invent[UU.wield].type == ODAGGER) ||
-              (Invent[UU.wield].type == OSPEAR) ||
-              (Invent[UU.wield].type == OFLAIL) ||
-              (Invent[UU.wield].type == OBATTLEAXE) ||
-              (Invent[UU.wield].type == OLONGSWORD) ||
-              (Invent[UU.wield].type == O2SWORD) ||
-              (Invent[UU.wield].type == OLANCE) ||
-              (Invent[UU.wield].type == OHAMMER) ||
-              (Invent[UU.wield].type == OVORPAL) ||
-              (Invent[UU.wield].type == OBELT)))
-            || (Invent[UU.wield].iarg > 0)) {
+    // If the monster can dull weapons, handle this now.  If a weapon
+    // can rust, its enchantment can go negative and the weapon will
+    // disintegrate if it reaches -10.  Otherwise, enchantment is
+    // reduced by 1 to a minimum of 0, after which no more damage is
+    // done.
+    if (didhit && isdulling(monst) && UU.wield > 0) {
+        struct Object wld = Invent[UU.wield];
+        const int RUST_MIN = -10;
+
+        if ( (canrust(wld) && wld.iarg > RUST_MIN) || wld.iarg > 0) {
             say("Your weapon is dulled by the %s.\n", mname);
             headsup();
             --Invent[UU.wield].iarg;
-        } else if (Invent[UU.wield].iarg <= -10) {
+        } else if (canrust(wld) && Invent[UU.wield].iarg <= RUST_MIN) {
             say("Your weapon disintegrates!\n");
             Invent[UU.wield] = obj(ONONE, 0);
             UU.wield = -1;
-            didhit = 0; /* Didn't hit after all... */
+            didhit = false; /* Didn't hit after all... */
         }/* if */
+
     }/* if */
 
     if (didhit) {
-        hitm(x, y, damag);
+        hitm(x, y, damag, true);
     }
 
     // Metamorphs polymorph to something fearsome when endangered
-    if (monst==METAMORPH && Map[x][y].mon.hitp < 25 && Map[x][y].mon.hitp > 0) {
-        Map[x][y].mon.id = BRONZEDRAGON + rund(9);
+    if (monst.id == METAMORPH && at(x, y)->mon.hitp < 25 && at(x, y)->mon.hitp > 0) {
+        at(x, y)->mon.id = BRONZEDRAGON + rund(9);
     }// if
 
     // And lemmings reproduce when scared.
-    if (Map[x][y].mon.id == LEMMING && rnd(100) <= 40) {
-        createmonster(LEMMING);
+    if (monst.id == LEMMING && !lemming_instakill) {
+        if (rnd(1000) <= 400) {
+            createmonster(LEMMING);
+        }
     }// if
-}/* hitmonster*/
+}/* hit_mon_melee*/
 
 
+
+// Adjust damage amount if appropriate when performing a melee attack
+// against 'monst'.
+static int
+melee_effects(int amt, bool *lance_vs_demon, struct Monster monst) {
+
+    // The Vorpal Blade has a chance of beheading.
+    if (UU.wield > 0 && Invent[UU.wield].type == OVORPAL && rnd(20) == 1 &&
+        !(MonType[monst.id].flags & FL_NOBEHEAD)) {
+        say("The Vorpal Blade goes snicker-snack and beheads the %s!\n",
+            monname(monst.id));
+        amt = monst.hitp;
+    }// if 
+
+    // Slayer and the Lance behave differently if the target is a demon
+    if (isdemon(monst)) {
+        if (wielding(OLANCE)) {
+            amt = 300;
+            *lance_vs_demon = true;
+        }
+        if (wielding(OSLAYER)) { amt = 10000; }
+    }// if
+
+    return amt;
+}// melee_effects
 
 
 /*
@@ -253,62 +254,55 @@ hitmonster(int x, int y) {
  *
  * Returns the number of hitpoints the monster absorbed.  This routine
  * is used to specifically damage a monster at a location
- * (x,y). Called by hitmonster(x,y) and other places.
+ * (x,y). Called by hit_mon_melee(x,y) and other places.
  */
 int
-hitm(int x, int y, int amt) {
-    int mon_id;
-    int amt2;
-    const char *mname;
+hitm(int x, int y, int amt, bool is_melee) {
+    if(!inbounds(x, y)) { return 0; }   // This should be an ASSERT.
 
-    VXY(x, y);      /* verify coordinates are within range */
-    amt2 = amt;     /* save initial damage so we can return it */
+    int amt2 = amt;     /* save initial damage so we can return it */
 
-    struct Monster *monst = &Map[x][y].mon;
-    mon_id = monst->id;
-    mname = monname(mon_id);
+    struct Monster *monst = &at(x, y)->mon;
+    int mon_id = monst->id;
+    const char *mname = monname(mon_id);
 
     /* if half damage curse adjust damage points */
     if (UU.halfdam) { amt >>= 1; }
     if (amt <= 0) { amt2 = amt = 1; }
 
+    // Mark this monster as being angry
     lasthit(x, y);
 
     /* make sure hitting monst breaks stealth condition */
-    Map[x][y].mon.awake = 1;
+    at(x, y)->mon.awake = 1;
     UU.holdmonst = 0;   /* hit a monster breaks hold monster spell */
 
     /* if a dragon and orb(s) of dragon slaying  */
-    if (UU.slaying && isdragon(*monst)) {
+    if (has_a(OORBOFDRAGON) && isdragon(*monst)) {
         amt *= 3;
     }/* if */
 
-    /* Deal with Vorpy */
-    if (UU.wield > 0 && Invent[UU.wield].type == OVORPAL && rnd(20) == 1 &&
-        !(MonType[mon_id].flags & FL_NOBEHEAD)) {
-        say("The Vorpal Blade goes snicker-snack and beheads the %s!\n",mname);
-        amt = monst->hitp;
-    }
-
+    // Certain melee weapons do special things when used; do that here.
+    bool lancemsg = false;
+    if (is_melee) {
+        amt = melee_effects(amt, &lancemsg, *monst);
+    }// if 
+    
     /* invincible monster fix is here */
     if (monst->hitp > mon_hp(mon_id)) {
         monst->hitp = mon_hp(mon_id);
     }// if
 
-    bool lancemsg = false;
-    if (isdemon(*monst)) {
-        if (wielding(OLANCE)) {
-            amt = 300;
-            lancemsg = true;
-        }
-        if (wielding(OSLAYER)) { amt = 10000; }
-    }// if 
-
+    // If the monster is killed...
     if (monst->hitp <= amt) {
-        short hpoints = monst->hitp;
+        int16_t hpoints = monst->hitp;
         int mgold =
             min(0xFFFF, (10 * MonType[mon_id].gold) / (10 + UU.challenge) );
 
+        // If this was the Big Bad, make a note of it for scoring.
+        if (monst->id == DEMONKING) {
+            UU.killedBigBad = true;
+        }// if
 
         say("The %s died!\n", mname);
         raiseexperience(mon_exp(mon_id));
@@ -317,9 +311,15 @@ hitm(int x, int y, int amt) {
         dropsomething(x, y, mon_id);
 
         if (mgold > 0) {
-            /* An education will increase your earnings. */
-            if (has_a(ODIPLOMA)) {
-                mgold += (double)mgold / 10 + 1;
+            // A bachelor's degree will increase your earnings by 40%
+            // (according to my extremely shoddy research).  So stay
+            // in school, kids!
+            //
+            // (We check for both the diploma and graduated() because
+            // it's possible to have your degree revoked while still
+            // keeping the diploma.)
+            if (has_a(ODIPLOMA) && graduated()) {
+                mgold += (double)mgold * 0.4 + 1;
             }/* if */
 
             dropgold(rnd(mgold) + mgold);
@@ -327,12 +327,12 @@ hitm(int x, int y, int amt) {
 
         monst->hitp = 0;
         return hpoints;
-    }// if 
+    }// if
 
     if (lancemsg) {
         say("Your lance of death tickles the %s!\n", mname);
-    }// if 
-    
+    }// if
+
     monst->hitp -= amt;
     return amt2;
 }/* hitm */
@@ -342,13 +342,13 @@ hitm(int x, int y, int amt) {
  *  Function for the monster to hit the player from (x,y)
  */
 void
-hitplayer (int x, int y) {
+hitplayer (const int x, const int y) {
     int dam,tmp,mster,bias;
     const char *mname;
 
-    VXY(x,y);   /* ensure coordinates are within range */
+    if (!inbounds(x, y)) { return; }    // This should be an assert.
 
-    mster = Map[x][y].mon.id;
+    mster = at(x, y)->mon.id;
     mname = monname(mster);
 
     bias = UU.challenge + 1;
@@ -363,11 +363,13 @@ hitplayer (int x, int y) {
             return;
         }
 
-    if (   mster < DEMONLORD1
-        && mster != PLATINUMDRAGON
-        && UU.charmcount
-        && rnd(30) + 5*MonType[mster].level - UU.charisma < 30) {
-
+    // If the player has Charm Monster and the monster isn't immune,
+    // the monster may be charmed out of the attack.
+    if (UU.charmcount               &&
+        mster < DEMONLORD1          &&
+        mster != PLATINUMDRAGON     &&
+        rnd(30) + 5*MonType[mster].level - charisma() < 30)
+    {
         say("The %s is awestruck by your magnificence!\n", mname);
         return;
     }
@@ -384,21 +386,26 @@ hitplayer (int x, int y) {
         if (Invent[UU.wield].type==OSLAYER)
             dam=(int) (1 - (0.1 * rnd(5)) * dam);
 
-    /*  spirit naga's and poltergeist's damage is halved if scarab of
+    /* spirit naga's and poltergeist's damage is halved if scarab of
       negate spirit */
-    if (UU.negatespirit || UU.spiritpro)
-        if ((mster ==POLTERGEIST) || (mster ==SPIRITNAGA))
-            dam = (int) dam/2;
+    if (
+        (mster == POLTERGEIST || mster == SPIRITNAGA )
+        &&
+        (has_a(OSPIRITSCARAB) || UU.spiritpro)
+        )
+    {
+        dam = (int) dam/2;
+    }
 
     /*  halved if undead and cube of undead control */
-    if (UU.cube_of_undead || UU.undeadpro)
+    if (has_a(OCUBE_of_UNDEAD) || UU.undeadpro)
         if ((mster ==VAMPIRE) || (mster ==WRAITH) || (mster ==ZOMBIE))
             dam = (int) dam/2;
 
     tmp = 0;
     if (MonType[mster].attack)
-        if (((dam + bias + 8) > UU.cached_ac)
-            || (rnd((int)((UU.cached_ac>0)?UU.cached_ac:1))==1)) {
+        if (((dam + bias + 8) > defense())
+            || (rnd((int)((defense()>0)?defense():1))==1)) {
             if (spattack(MonType[mster].attack, x, y)) {
                 return;
             }
@@ -406,10 +413,10 @@ hitplayer (int x, int y) {
             bias -= 2;
         }
 
-    if (((dam + bias) > UU.cached_ac) || (rnd((int)((UU.cached_ac>0)?UU.cached_ac:1))==1)) {
+    if (((dam + bias) > defense()) || (rnd((int)((defense()>0)?defense():1))==1)) {
         say("The %s hit you.\n", mname);
         tmp = 1;
-        if ((dam -= UU.cached_ac) < 0)
+        if ((dam -= defense()) < 0)
             dam=0;
 
         if (dam > 0) {
@@ -429,7 +436,7 @@ dropsomething (int x, int y, int mon_id) {
 
     /* If this monster has a steal attack and there are stolen goods
      * on this level, return some. */
-    if (Lev->numStolen && (MonType[mon_id].attack == SA_STEALGOLD ||
+    if (lev()->numStolen && (MonType[mon_id].attack == SA_STEALGOLD ||
                            MonType[mon_id].attack == SA_STEAL ||
                            MonType[mon_id].attack == SA_MULTI)   ) {
         int i;
@@ -437,7 +444,7 @@ dropsomething (int x, int y, int mon_id) {
         for (i = 0; i < rnd(3); i++) {
             struct Object sob;
 
-            sob = remove_stolen(Lev);
+            sob = remove_stolen(lev());
             if (!sob.type) {
                 break;
             }/* if */
@@ -521,22 +528,19 @@ dropgold(int amount) {
  *
  */
 static bool
-spattack(enum SP_ATTACK attack, int xx, int yy) {
+spattack(enum SP_ATTACK attack, const int xx, const int yy) {
     int i;
-    char *p = 0;
     bool is_lesser_attack = false;
-    uint8_t monst;
-    const char *mname;
 
     static char spsel[] = {SA_RUST, SA_FIRE, SA_BIGFIRE, SA_COLD, SA_DRAIN,
                            SA_STEALGOLD, SA_DISENCHANT, SA_CONFUSE, SA_PSIONICS,
                            SA_STEAL};
 
 
-    VXY(xx, yy);        /* verify x & y coordinates */
+    ASSERT(inbounds(xx, yy));
 
-    monst = Map[xx][yy].mon.id;
-    mname = monname(monst);
+    const uint8_t monst = at(xx, yy)->mon.id;
+    const char *mname = monname(monst);
 
     /*
      * cancel only works 5% of time for demon prince and god
@@ -562,9 +566,10 @@ spattack(enum SP_ATTACK attack, int xx, int yy) {
 
     /* if have cube of undead control,  wraiths and vampires do nothing */
     if ((monst == WRAITH) || (monst == VAMPIRE))
-        if ((UU.cube_of_undead) || (UU.undeadpro))
+        if (has_a(OCUBE_of_UNDEAD) || (UU.undeadpro))
             return false;
 
+    char *p = NULL;
     switch (attack) {
     case SA_NONE: return false; /* Shouldn't happen; shuts up gcc. */
 
@@ -573,12 +578,12 @@ spattack(enum SP_ATTACK attack, int xx, int yy) {
         break;
 
     case SA_FIRE:
-        i = rnd(15) + 8 - UU.cached_ac;
+        i = rnd(15) + 8 - defense();
         is_lesser_attack = true;
         /* Fall through */
 
     case SA_BIGFIRE:
-        if (!is_lesser_attack) i = rnd(20) + 25 - UU.cached_ac;
+        if (!is_lesser_attack) i = rnd(20) + 25 - defense();
 
         say ("The %s breathes fire at you!\n", mname);
         if (UU.fireresistance) {
@@ -594,17 +599,17 @@ spattack(enum SP_ATTACK attack, int xx, int yy) {
         return false;
 
     case SA_STING:
-        if (UU.strength > 3) {
+        if (strength() > 3) {
             p = "The %s stung you!  You feel weaker.\n";
             headsup();
-            if (--UU.strength < 3)
-                UU.strength = 3;
-        } else
+            strength_adjust(-1);
+        } else {
             p = "The %s stung you!\n";
+        }
         break;
 
     case SA_COLD:
-        i = rnd(15) + 18 - UU.cached_ac;
+        i = rnd(15) + 18 - defense();
 
         say("The %s blasts you with its cold breath.\n", mname);
         headsup();
@@ -626,7 +631,7 @@ spattack(enum SP_ATTACK attack, int xx, int yy) {
         return false;
 
     case SA_GUSHER:
-        i = rnd(15) + 25 - UU.cached_ac;
+        i = rnd(15) + 25 - defense();
         say("The %s got you with a gusher!\n", mname);
         headsup();
 
@@ -634,7 +639,7 @@ spattack(enum SP_ATTACK attack, int xx, int yy) {
         return false;
 
     case SA_STEALGOLD: {
-        if (UU.notheft) return false;
+        if (has_a(ONOTHEFT)) return false;
 
         if (UU.gold) {
             unsigned long stolen;
@@ -643,7 +648,7 @@ spattack(enum SP_ATTACK attack, int xx, int yy) {
             stolen = (stolen > UU.gold) ? UU.gold : stolen;
             stolen = (stolen > MAX_IARG) ? MAX_IARG : stolen;
 
-            add_to_stolen(obj(OGOLDPILE, stolen), Lev);
+            add_to_stolen(obj(OGOLDPILE, stolen));
 
             UU.gold -= stolen;
 
@@ -693,7 +698,7 @@ spattack(enum SP_ATTACK attack, int xx, int yy) {
     }
 
     case SA_TAILTHWACK:
-        i = rnd(25) - UU.cached_ac;
+        i = rnd(25) - defense();
 
         say("The %s hit you with its barbed tail.\n", mname);
         headsup();
@@ -713,7 +718,7 @@ spattack(enum SP_ATTACK attack, int xx, int yy) {
 
     case SA_PSIONICS:
         p = "The %s flattens you with it's psionics!\n";
-        i = rnd(15) + 30 - UU.cached_ac;
+        i = rnd(15) + 30 - defense();
 
         say(p, mname);
         headsup();
@@ -722,8 +727,8 @@ spattack(enum SP_ATTACK attack, int xx, int yy) {
         return false;
 
     case SA_STEAL:
-        if (UU.notheft) {
-            return false; /* he has device of no theft */
+        if (has_a(ONOTHEFT)) {
+            return false; /* players has device of no theft */
         }/* if */
 
         if (emptyhanded()) {
@@ -741,12 +746,12 @@ spattack(enum SP_ATTACK attack, int xx, int yy) {
         return true;
 
     case SA_BITE:
-        i = rnd(10) + 5 - UU.cached_ac;
+        i = rnd(10) + 5 - defense();
         is_lesser_attack = true;
         /* Fall through */
 
     case SA_BIGBITE:
-        if (!is_lesser_attack) i = rnd(15) + 10 - UU.cached_ac;
+        if (!is_lesser_attack) i = rnd(15) + 10 - defense();
         p = "The %s bit you!\n";
 
         say(p, mname);
@@ -806,18 +811,19 @@ annihilate() {
 
     for (k = 0, i = UU.x - 1; i <= UU.x + 1; i++) {
         for (j = UU.y - 1; j <= UU.y + 1; j++) {
-            if (!verifyxy(&i, &j))  /* if not out of bounds */
-                if (*(p = &Map[i][j].mon.id)) {  /* if a monster there */
-                    if (*p < DEMONLORD1) {
-                        k += mon_exp(*p);
-                        *p = 0;
-                    } else {
-                        say("The %s barely escapes being annihilated!\n",
-                            MonType[*p].name);
-                        /* lose half hit points */
-                        Map[i][j].mon.hitp = (Map[i][j].mon.hitp >> 1) + 1;
-                    }/* if .. else*/
-                }/* if */
+            if (! inbounds(i, j)) { continue; }
+
+            if (*(p = &at(i, j)->mon.id)) {  /* if a monster there */
+                if (*p < DEMONLORD1) {
+                    k += mon_exp(*p);
+                    *p = 0;
+                } else {
+                    say("The %s barely escapes being annihilated!\n",
+                        MonType[*p].name);
+                    /* lose half hit points */
+                    at(i, j)->mon.hitp = (at(i, j)->mon.hitp >> 1) + 1;
+                }/* if .. else*/
+            }/* if */
         }/* for */
     }/* for */
 
@@ -835,31 +841,38 @@ int
 makemonst(int lev) {
     static const char monstlevel[] = {5, 11, 17, 22, 27, 33, 39, 42, 46, 50,
                                       53, 56};
-    int tmp, x;
+    int monst, x;
 
     if (lev < 1)
         lev = 1;
     if (lev > 12)
         lev = 12;
 
-    tmp = WATERLORD;
+    monst = WATERLORD;
 
-    if (lev < 5)
-        while (tmp == WATERLORD)
-            tmp = rnd(((x = monstlevel[lev - 1]) != 0) ? x : 1);
+    if (lev < 5) {
+        while (monst == WATERLORD) {
+            monst = rnd(((x = monstlevel[lev - 1]) != 0) ? x : 1);
+        }
+    }
+    else {
+        while (monst == WATERLORD) {
+            monst = rnd(((x=monstlevel[lev-1] - monstlevel[lev-4]) != 0) ? x : 1)
+                + monstlevel[lev - 4];
+        }
+    }
 
-    else while (tmp == WATERLORD)
-        tmp = rnd(((x=monstlevel[lev-1] - monstlevel[lev-4]) != 0) ? x : 1)
-            + monstlevel[lev - 4];
+    while (is_banished(monst) && monst < MAXCREATURE) {
+        monst++;
+    }
 
-    while ((MonType[tmp].flags & FL_GENOCIDED) != 0 && tmp < MAXCREATURE)
-        tmp++;
+    if (getlevel() <= DBOTTOM) {
+        if (rnd(100) < 10) {
+            monst = LEMMING;
+        }
+    }
 
-    if (getlevel() <= DBOTTOM)
-        if (rnd(100) < 10)
-            tmp = LEMMING;
-
-    return (tmp);
+    return monst;
 }/* makemonst*/
 
 
@@ -880,8 +893,8 @@ randmonst () {
     /* No monsters in the town. */
     if (level == 0) return;
 
-    if (--GS.monstCount <= 0) {
-        GS.monstCount = 120 - level*4;
+    if (--UU.monstCount <= 0) {
+        UU.monstCount = 120 - level*4;
         fillmonst(makemonst(getlevel()));
     }/* if */
 }/* randmonst */
@@ -895,10 +908,10 @@ fillmonst (int what) {
     for (int trys = 10; trys > 0; --trys) {
         int x = rnd(MAXX-2);
         int y = rnd(MAXY-2);
-        if (Map[x][y].obj.type == 0 && Map[x][y].mon.id == 0 &&
+        if (at(x, y)->obj.type == 0 && at(x, y)->mon.id == 0 &&
             (UU.x != x || UU.y != y))
         {
-            Map[x][y].mon = mk_mon(what);
+            at(x, y)->mon = mk_mon(what);
             return 0;
         }// if
     }// for

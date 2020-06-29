@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "internal_assert.h"
@@ -10,6 +10,7 @@
 #include "settings.h"
 #include "os.h"
 #include "look.h"
+#include "ui.h"
 
 #include "player.h"
 
@@ -21,6 +22,36 @@ struct Player UU;
 
 /* Global player inventory. */
 struct Object Invent[IVENSIZE];
+
+
+// Various offsets for the stat mods performed by recalc()
+enum STAT_MODS {
+    // Carried
+    SM_HAMMER       = 10,
+    SM_SW_SLASHING  = 5,
+    SM_SLAYER       = 10,
+    SM_STAFF        = 10,
+
+    // Drugs
+    SM_COKED        = 33,
+    SM_DEX          = 3,
+
+    // Potions
+    SM_HEROISM      = 10,
+    SM_GIANTSTR     = 20,
+
+    // Spells
+    SM_STRENGTH     = 3,
+    SM_PROTECT      = 2,
+    SM_INVULN       = 10,
+
+    // Other effects
+    SM_ALTPRO       = 3,
+};
+
+
+static void item_loss_action(struct Object thing);
+static void item_gain_action (struct Object thing);
 
 
 /* Return a (read-only) string describing the character class given by
@@ -77,76 +108,76 @@ static void
 init_cc_specific (enum CHAR_CLASS cc) {
     switch(cc) {
     case CCOGRE:
-        GS.spellknow[CMMISSILE] = true;  /* mle */
+        UU.spellknow[CMMISSILE] = true;  /* mle */
         UU.spellmax=UU.spells=1;
         UU.hpmax=UU.hp=16;
-        UU.strength = 18;   /* strength */
-        UU.intelligence = 4;    /* intelligence */
-        UU.wisdom = 6;  /* wisdom */
-        UU.constitution = 16;   /* constitution */
-        UU.dexterity = 6;   /* dexterity */
-        UU.charisma = 4;    /* charisma */
+        strength_init(18);   /* strength */
+        intelligence_init(4);    /* intelligence */
+        wisdom_init(6);  /* wisdom */
+        constitution_init(16);   /* constitution */
+        dexterity_init(6);   /* dexterity */
+        charisma_init(4);    /* charisma */
         Invent[0] = random_potion();
         Invent[1] = random_potion();
         break;
 
     case CCWIZARD:
-        GS.spellknow[CMMISSILE] = true;  /* mle */
-        GS.spellknow[CCHARM] = true;  /* chm */
+        UU.spellknow[CMMISSILE] = true;  /* mle */
+        UU.spellknow[CCHARM] = true;  /* chm */
         UU.spellmax=UU.spells=2;
         UU.hpmax=UU.hp=8;
-        UU.strength = 8;    /* strength */
-        UU.intelligence = 16;   /* intelligence */
-        UU.wisdom = 16; /* wisdom */
-        UU.constitution = 6;    /* constitution */
-        UU.dexterity = 6;   /* dexterity */
-        UU.charisma = 8;    /* charisma */
+        strength_init(8);    /* strength */
+        intelligence_init(16);   /* intelligence */
+        wisdom_init(16); /* wisdom */
+        constitution_init(6);    /* constitution */
+        dexterity_init(6);   /* dexterity */
+        charisma_init(8);    /* charisma */
         Invent[0] = obj(OPTREASURE, 0); /* potion of treasure detection */
         Invent[1] = random_scroll();
         Invent[2] = random_scroll();
         break;
 
     case CCKLINGON:
-        GS.spellknow[CSSPEAR] = true;  /* ssp */
+        UU.spellknow[CSSPEAR] = true;  /* ssp */
         UU.spellmax=UU.spells=1;
         UU.hpmax=UU.hp=14;
-        UU.strength = 14;   /* strength */
-        UU.intelligence = 12;   /* intelligence */
-        UU.wisdom = 4;  /* wisdom */
-        UU.constitution = 12;   /* constitution */
-        UU.dexterity = 8;   /* dexterity */
-        UU.charisma = 3;    /* charisma */
+        strength_init(14);   /* strength */
+        intelligence_init(12);   /* intelligence */
+        wisdom_init(4);  /* wisdom */
+        constitution_init(12);   /* constitution */
+        dexterity_init(8);   /* dexterity */
+        charisma_init(3);    /* charisma */
         Invent[0] = obj(OSTUDLEATHER, 0);
         Invent[1] = random_potion();
         UU.wear = 0;
         break;
 
     case CCELF:
-        GS.spellknow[CPROT] = true;
+        UU.spellknow[CPROT] = true;
         UU.spells=1;
         UU.spellmax=2;
         UU.hpmax=UU.hp=8;
-        UU.strength = 8;    /* strength */
-        UU.intelligence = 14;   /* intelligence */
-        UU.wisdom = 12; /* wisdom */
-        UU.constitution = 8;    /* constitution */
-        UU.dexterity = 8;   /* dexterity */
-        UU.charisma = 14;   /* charisma */
+        strength_init(8);    /* strength */
+        intelligence_init(14);   /* intelligence */
+        wisdom_init(12); /* wisdom */
+        constitution_init(8);    /* constitution */
+        dexterity_init(8);   /* dexterity */
+        charisma_init(14);   /* charisma */
         Invent[0] = obj(OLEATHER, 0);
         Invent[1] = random_scroll();
         UU.wear=0;
         break;
 
     case CCROGUE:
-        GS.spellknow[CMMISSILE] = true;
+        UU.spellknow[CMMISSILE] = true;
         UU.spellmax=UU.spells=1;
         UU.hpmax=UU.hp=12;
-        UU.strength = 8;    /* strength */
-        UU.intelligence = 12;   /* intelligence */
-        UU.wisdom = 8;  /* wisdom */
-        UU.constitution = 10;   /* constitution */
-        UU.dexterity = 14;  /* dexterity */
-        UU.charisma = 6;    /* charisma */
+        strength_init(8);    /* strength */
+        intelligence_init(12);   /* intelligence */
+        wisdom_init(8);  /* wisdom */
+        constitution_init(10);   /* constitution */
+        dexterity_init(14);  /* dexterity */
+        charisma_init(6);    /* charisma */
 
         Invent[0] = obj (OLEATHER, 0);
         Invent[1] = obj (ODAGGER, 0);
@@ -157,16 +188,16 @@ init_cc_specific (enum CHAR_CLASS cc) {
         break;
 
     case CCGEEK:
-        GS.spellknow[CPROT] = true;
-        GS.spellknow[CMMISSILE] = true;
+        UU.spellknow[CPROT] = true;
+        UU.spellknow[CMMISSILE] = true;
         UU.spellmax=UU.spells=1;
         UU.hpmax=UU.hp=10;
-        UU.strength = 12;   /* strength */
-        UU.intelligence = 12;   /* intelligence */
-        UU.wisdom = 12; /* wisdom */
-        UU.constitution = 12;   /* constitution */
-        UU.dexterity = 12;  /* dexterity */
-        UU.charisma = 12;   /* charisma */
+        strength_init(12);   /* strength */
+        intelligence_init(12);   /* intelligence */
+        wisdom_init(12); /* wisdom */
+        constitution_init(12);   /* constitution */
+        dexterity_init(12);  /* dexterity */
+        charisma_init(12);   /* charisma */
 
         Invent[0] = obj(OLEATHER, 0);
         Invent[1] = obj(ODAGGER, 0);
@@ -176,15 +207,15 @@ init_cc_specific (enum CHAR_CLASS cc) {
         break;
 
     case CCDWARF:
-        GS.spellknow[CPROT] = true;
+        UU.spellknow[CPROT] = true;
         UU.spellmax=UU.spells=1;
         UU.hpmax=UU.hp=12;
-        UU.strength = 16;   /* strength */
-        UU.intelligence = 6;    /* intelligence */
-        UU.wisdom = 8;  /* wisdom */
-        UU.constitution = 16;   /* constitution */
-        UU.dexterity = 4;   /* dexterity */
-        UU.charisma = 4;    /* charisma */
+        strength_init(16);   /* strength */
+        intelligence_init(6);    /* intelligence */
+        wisdom_init(8);  /* wisdom */
+        constitution_init(16);   /* constitution */
+        dexterity_init(4);   /* dexterity */
+        charisma_init(4);    /* charisma */
 
         Invent[0] = obj(OSPEAR, 0);
 
@@ -194,12 +225,12 @@ init_cc_specific (enum CHAR_CLASS cc) {
     case CCRAMBO:
         UU.spellmax=UU.spells=0;
         UU.hpmax=UU.hp=1;
-        UU.strength = 3;    /* strength */
-        UU.intelligence = 3;    /* intelligence */
-        UU.wisdom = 3;  /* wisdom */
-        UU.constitution = 3;    /* constitution */
-        UU.dexterity = 3;   /* dexterity */
-        UU.charisma = 3;    /* charisma */
+        strength_init(3);    /* strength */
+        intelligence_init(3);    /* intelligence */
+        wisdom_init(3);  /* wisdom */
+        constitution_init(3);    /* constitution */
+        dexterity_init(3);   /* dexterity */
+        charisma_init(3);    /* charisma */
         Invent[0] = obj(OLANCE, 0);
 
         UU.wield=0;
@@ -225,6 +256,7 @@ init_new_player (enum CHAR_CLASS cc,
     UU.gender = gender;
     UU.spouse_gender = spouse_gender;
     UU.challenge = difficulty;
+    UU.monstCount = 80;
 
     strncpy(UU.name, GameSettings.name, sizeof(UU.name));
     UU.name[sizeof(UU.name) - 1] = '\0';
@@ -240,6 +272,8 @@ init_new_player (enum CHAR_CLASS cc,
 
     init_cc_specific(cc);
 
+    stat_init(&UU.defense, 0, 0, -100);
+
     UU.x = rnd(MAXX-2);
     UU.y = rnd(MAXY-2);
     UU.gtime = 0;    /*  time clock starts at zero   */
@@ -247,24 +281,34 @@ init_new_player (enum CHAR_CLASS cc,
     // If the player previously won a game, they will owe taxes
     UU.outstanding_taxes = get_taxes_owed();
 
-    /* Identify a potion of Cure Dianthroritis for free. */
-    Types[OPCUREDIANTH].isKnown = true;
+    // Identify everything that's known by default.
+    for (int n = 0; n < OBJ_COUNT; n++) {
+        if (Types[n].isKnownByDefault) {
+            identify(n);
+        }
+    }// for
 
-    recalc();
+    /* Identify a potion of Cure Dianthroritis for free. */
+    identify(OPCUREDIANTH);
 }/* init_new_player */
 
 
-bool
-has_a(enum OBJECT_ID type) {
-    int n;
-
-    for (n = 0; n < IVENSIZE; n++) {
+// Return the index in inventory of the first object of type 'type' or
+// a negative value if it's not present.
+int
+index_of_first(enum OBJECT_ID type) {
+    for (int n = 0; n < IVENSIZE; n++) {
         if (Invent[n].type == type) {
-            return true;
+            return n;
         }
     }/* for */
 
-    return false;
+    return -1;
+}// index_of_first
+
+bool
+has_a(enum OBJECT_ID type) {
+    return index_of_first(type) >= 0;
 }/* has_a*/
 
 
@@ -348,7 +392,7 @@ void
 positionplayer () {
     int try = 3;
 
-    while ((Map[UU.x][UU.y].obj.type || Map[UU.x][UU.y].mon.id) && try) {
+    while ((at(UU.x, UU.y)->obj.type || at(UU.x, UU.y)->mon.id) && try) {
         if (++UU.x >= MAXX-1) {
             UU.x = 1;
             if (++UU.y >= MAXY-1) {
@@ -382,8 +426,6 @@ positionplayer () {
 
 bool
 moveplayer (DIRECTION dir, bool* success) {
-    int new_x, new_y, i;
-
     *success = true;
 
     if (dir == DIR_CANCEL) {
@@ -393,9 +435,10 @@ moveplayer (DIRECTION dir, bool* success) {
 
     if (UU.confuse && UU.level < rnd(30) && dir != DIR_STAY) {
         // If confused, any dir.
-        dir = rund(DIR_MAX - DIR_MIN_DIR) + DIR_MIN_DIR;
+        dir = randdir();
     }/* if */
 
+    int8_t new_x, new_y;
     adjpoint(UU.x, UU.y, dir, &new_x, &new_y);
 
     if (new_x < 0 || new_x >= MAXX || new_y < 0 || new_y >= MAXY) {
@@ -403,11 +446,11 @@ moveplayer (DIRECTION dir, bool* success) {
         return false;
     }
 
-    i = Map[new_x][new_y].obj.type;
+    uint8_t thing = at(new_x, new_y)->obj.type;
 
     /*  hit a wall (or closed door while time has stopped) */
-    if ((i == OWALL && UU.wtw == 0) ||
-        (UU.timestop != 0 && i == OCLOSEDDOOR))
+    if ((thing == OWALL && UU.wtw == 0) ||
+        (UU.timestop != 0 && thing == OCLOSEDDOOR))
     {
         bool foundit = false;
 
@@ -422,8 +465,8 @@ moveplayer (DIRECTION dir, bool* success) {
         return false;
     }// if
 
-    if (Map[new_x][new_y].mon.id > 0) {
-        hitmonster(new_x, new_y);
+    if (at(new_x, new_y)->mon.id > 0) {
+        hit_mon_melee(new_x, new_y);
         return false;
     } /* hit a monster*/
 
@@ -432,11 +475,13 @@ moveplayer (DIRECTION dir, bool* success) {
     UU.x = new_x;
     UU.y = new_y;
 
-    if (i && i != OTRAPARROWIV && i != OIVTELETRAP && i != OIVDARTRAP
-        && i!=OIVTRAPDOOR)
+    if (thing && thing != OTRAPARROWIV && thing != OIVTELETRAP &&
+        thing != OIVDARTRAP && thing != OIVTRAPDOOR)
+    {
         return false;
-    else
+    } else {
         return true;
+    }
 }/* moveplayer */
 
 
@@ -489,28 +534,144 @@ carrymod(enum OBJECT_ID oid) {
     return mod;
 }/* carrymod */
 
+static void
+reset_stats() {
+    intelligence_reset_mod();
+    strength_reset_mod();
+    wisdom_reset_mod();
+    constitution_reset_mod();
+    dexterity_reset_mod();
+    charisma_reset_mod();
+    defense_reset_mod();
+}// reset_stats
+
+
+static void
+adjust_all_stat_mods(uint16_t val) {
+    strength_adjust_mod(val);
+    intelligence_adjust_mod(val);
+    wisdom_adjust_mod(val);
+    constitution_adjust_mod(val);
+    dexterity_adjust_mod(val);
+    charisma_adjust_mod(val);
+}// adjust_all_stat_mods
+
+
+// Add whatever stat mods might be caused by carrying 'obj'.
+static void
+recalc_carry(struct Object obj) {
+
+    switch (obj.type) {
+    case OHAMMER:
+        dexterity_adjust_mod(SM_HAMMER);
+        strength_adjust_mod(SM_HAMMER);
+        intelligence_adjust_mod(-SM_HAMMER);
+        break;
+
+    case ODEXRING:
+        dexterity_adjust_mod(obj.iarg + 1);
+        break;
+
+    case OSTRRING:
+        strength_adjust_mod(obj.iarg + 1);
+        break;
+
+    case OCLEVERRING:
+        intelligence_adjust_mod(obj.iarg + 1);
+        break;
+
+    case OSWORDofSLASHING:
+        dexterity_adjust_mod(SM_SW_SLASHING);
+        break;
+
+    case OSLAYER:
+        intelligence_adjust_mod(SM_SLAYER);
+        break;
+
+    case OPSTAFF:
+        wisdom_adjust_mod(SM_STAFF);
+        break;
+
+    default:    // Why yes compiler, I *do* plan on not catching everything
+        break;
+    }// switch
+
+}// recalc_carry
+
+
+// Add whatever stat mods might be caused by various temporary
+// effects.
+static void
+recalc_effects() {
+    if (UU.coked) {
+        adjust_all_stat_mods(SM_COKED);
+    }// if
+
+    if (UU.dexCount) {
+        dexterity_adjust_mod(SM_DEX);
+    }// if
+
+    if (UU.hero) {
+        adjust_all_stat_mods(SM_HEROISM);
+    }// if
+
+    if (UU.strcount) {
+        strength_adjust_mod(SM_STRENGTH);
+    }// if
+
+    if (UU.giantstr) {
+        strength_adjust_mod(SM_GIANTSTR);
+    }// if
+
+    if (UU.protectionTime) {
+        defense_adjust_mod(SM_PROTECT);
+    }// if
+
+    if (UU.globe) {
+        defense_adjust_mod(SM_INVULN);
+    }// if
+
+    if (UU.altpro) {
+        defense_adjust_mod(SM_ALTPRO);
+    }// if
+
+}// recalc_effects
 
 
 // recalc() function to recalculate the armor class, weapon class,
-// etc.  of the player
+// etc. of the player.
+//
+// This should be called *after* regen() in the turn.
 void
 recalc () {
-    UU.cached_ac = UU.moredefenses
-        + statfor(UU.wear)
-        + statfor(UU.shield)
-        + carrymod(OPROTRING);
+    reset_stats();
 
-    UU.cached_wc = UU.moreDmg
-        + statfor(UU.wield)
-        + carrymod(ODAMRING)
-        + carrymod(OBELT);
+    // Defense from weapons and armor.
+    defense_adjust_mod(statfor(UU.wear)+statfor(UU.shield)+carrymod(OPROTRING));
 
-    UU.cached_regen_rate = 1
-        + carrymod(OREGENRING)
-        + carrymod(ORINGOFEXTRA);
+    // Check for the Eye.  This isn't strictly necessary but it
+    // reinforces the principal that Invent is the single point of
+    // truth for these sorts of checks.  It also minimizes the damage
+    // that can be done if a bug lets the player take or drop the Eye
+    // in a way that bypasses item_gain/loss_action().
+    UU.hasTheEyeOfLarn = has_a(OLARNEYE);
 
-    UU.cached_spell_regen_boost = carrymod(OENERGYRING);
+    // Other carried
+    for (int n = 0; n < IVENSIZE; n++) {
+        recalc_carry(Invent[n]);
+    }// for
+
+    // Other effects (drugs, potions, spells, etc.)
+    recalc_effects();
 }/* recalc */
+
+
+// Compute the weapon class and return it.  (This is simple enough
+// that we don't need to store the actual value.)
+int32_t
+weaponclass() {
+    return statfor(UU.wield) + carrymod(ODAMRING) + carrymod(OBELT);
+}// weaponclass
 
 
 /*
@@ -545,91 +706,59 @@ void
 pickup() {
     bool stat;
 
-    stat = take(Map[UU.x][UU.y].obj, "");
+    stat = take(at(UU.x, UU.y)->obj, "");
     if (!stat) return;
 
     udelobj();
 }/* pickup*/
 
 
-/* Perform whatever stat modifications need to be done when picking up
- * 'thing'. */
-static bool
-updatestats (struct Object thing) {
-    bool changed = false;
+// Perform whatever actions need to be done when picking up
+// an object.
+static void
+item_gain_action (struct Object thing) {
 
     switch(thing.type) {
-    case OPROTRING:
-    case ODAMRING:
-    case OBELT:
-        changed = true;
-        break;
-
-    case ODEXRING:
-        UU.dexterity += thing.iarg+1;
-        changed = true;
-        break;
-
-    case OSTRRING:
-        UU.strextra += thing.iarg+1;
-        changed = true;
-        break;
-
-    case OCLEVERRING:
-        UU.intelligence += thing.iarg+1;
-        changed = true;
-        break;
-
-    case OHAMMER:
-        UU.dexterity += 10;
-        UU.strextra += 10;
-        UU.intelligence_pre_hammer = UU.intelligence;
-        UU.intelligence = max(UU.intelligence_pre_hammer - 10, 1);
-        changed = true;
-        break;
-
     case OORB:
-        UU.orb = true;
+        // We have to bump awareness right now because recalc() has
+        // already been called and we want this to take effect
+        // immediately.
         UU.awareness++;
         break;
 
-    case OORBOFDRAGON:
-        UU.slaying++;
-        break;
+    case OLARNEYE:
+        // Set it now because recalc has already been called.
+        UU.hasTheEyeOfLarn = true;
 
-    case OSPIRITSCARAB:
-        UU.negatespirit++;
-        break;
+        if (UU.blindCount == 0) {
+            say("Your sight fades for a moment...\n");
+            nap(1000);
+            say("Your sight returns, and everything looks crystal-clear!\n");
+        }/* if */
 
-    case OCUBE_of_UNDEAD:
-        UU.cube_of_undead++;
-        break;
-
-    case ONOTHEFT:
-        UU.notheft++;
-        break;
-
-    case OSWORDofSLASHING:
-        UU.dexterity +=5;
-        changed = true;
-        break;
-
-    case OSLAYER:
-        UU.intelligence+=10;
-        break;
-
-    case OPSTAFF:
-        UU.wisdom+=10;
-        break;
-
-    case  OLARNEYE:
-        UU.eyeOfLarn = 1;
         break;
     }/* switch*/
+}/* item_gain_action */
 
-    return changed;
-}/* updatestats */
 
+// Perform whatever actions happen that are unique to a specific
+// object or class of objects when they are received.  (Currently,
+// only the Eye has one.)
+static void
+item_loss_action (struct Object obj) {
+    if (obj.type == OLARNEYE) {
+
+        // Set here because recalc() has already been called and also,
+        // we're checking anyway.
+        UU.hasTheEyeOfLarn = false;
+
+        if (!UU.blindCount) {
+            say("Your sight fades for a moment...\n");
+            nap(1000);
+            say("Your sight returns but everything looks dull and faded.\n");
+        }// if
+    }// if
+}/* item_loss_action */
 
 
 /* Put 'thing' in player's inventory.  If inventory is full, display
@@ -657,18 +786,10 @@ take (struct Object thing, const char *ifullMsg) {
         return false;
     }/* if */
 
-    updatestats(thing);
-
     say("You pick up:\n");
     show_inv_item(i);
 
-    if (UU.blindCount == 0 && thing.type == OLARNEYE) {
-        say("Your sight fades for a moment...\n");
-        nap(2000);
-        see_and_update_fov();
-        update_display();
-        say("Your sight returns, and everything looks crystal-clear!\n");
-    }/* if */
+    item_gain_action(thing);
 
     return true;
 }/* take */
@@ -685,11 +806,7 @@ inventremove(int index) {
     if (UU.shield == index)
         UU.shield= -1;
 
-    adjustcvalues(obj.type, obj.iarg);
-
-    if (obj.type == OLANCE)  {
-        recalc();
-    }/* if */
+    item_loss_action(obj);
 
     Invent[index] = NULL_OBJ;
 
@@ -716,9 +833,9 @@ drop_object (int k) {
         say("You don't have item %c! \n",k+'a');
         return(1);
     }
-    if (Map[UU.x][UU.y].obj.type == OPIT)
+    if (at(UU.x, UU.y)->obj.type == OPIT)
         pitflag=1;
-    else if (Map[UU.x][UU.y].obj.type) {
+    else if (at(UU.x, UU.y)->obj.type) {
         headsup();
         say("There's something here already.\n");
         return(1);
@@ -729,7 +846,7 @@ drop_object (int k) {
 
     obj = inventremove(k);
     if (!pitflag) {
-        Map[UU.x][UU.y].obj = obj;
+        at(UU.x, UU.y)->obj = obj;
     } else {
         say("It disappears down the pit.\n");
     }/* if .. else*/
@@ -742,11 +859,11 @@ drop_object (int k) {
 
 
 void
-drop_gold (unsigned long amount) {
+drop_gold (int64_t amount) {
     struct Object *o;
-    unsigned dropamt = amount;
+    int64_t dropamt = amount;
 
-    o = &Map[UU.x][UU.y].obj;
+    o = &at(UU.x, UU.y)->obj;
 
     if (o->type == OGOLDPILE) {
         dropamt += o->iarg;
@@ -760,6 +877,8 @@ drop_gold (unsigned long amount) {
 
     UU.gold -= amount;
 
+    // TODO: randomly place the gold on the next level if it's not the
+    // bottom.
     if (o->type == OPIT) {
         say("The gold disappears down the pit.\n");
         return;
@@ -771,7 +890,7 @@ drop_gold (unsigned long amount) {
         say ("There isn't enough room to drop all that gold. ");
     }/* if */
 
-    say("You drop %ld gold piece%s.", dropamt, (dropamt==1) ? "" :"s");
+    say("You drop %ld gold piece%s.\n", dropamt, (dropamt==1) ? "" :"s");
 
     o->type = OGOLDPILE;
     o->iarg = dropamt;
@@ -789,7 +908,7 @@ drop_gold (unsigned long amount) {
 void
 enchantarmor (enum ENCH_HOW how) {
     int which;
-    long *whichSlot;
+    int8_t *whichSlot;
 
     /*
      *  Bomb out if we're not wearing anything.
@@ -825,7 +944,7 @@ enchantarmor (enum ENCH_HOW how) {
                     objname(Invent[which]));
             Invent[which] = NULL_OBJ;
             *whichSlot = -1;
-            adjustcvalues(Invent[which].type, Invent[which].iarg); /* Surely not? */
+            item_loss_action(Invent[which]); /* Surely not? */
             return;
         }
     }
@@ -851,12 +970,12 @@ enchweapon (int how) {
     wieldedType = wieldedObj.type;
     if (!isscroll(wieldedObj) && !ispotion(wieldedObj)) {
         Invent[UU.wield].iarg++;
-        if (wieldedType==OCLEVERRING)
-            UU.intelligence++;
-        else if (wieldedType==OSTRRING)
-            UU.strextra++;
-        else if (wieldedType==ODEXRING)
-            UU.dexterity++;
+
+        // Enchanting the relevant artifact will also boost a stat.
+        if (wieldedType == OCLEVERRING)     { intelligence_adjust(1); }
+        if (wieldedType == OSTRRING)        { strength_adjust(1); }
+        if (wieldedType == ODEXRING)        { dexterity_adjust(1); }
+
         if (Invent[UU.wield].iarg >= 10 && rnd(10) <= 9) {
             if (how==ENCH_ALTAR) {
                 Invent[UU.wield].iarg--;
@@ -868,7 +987,7 @@ enchweapon (int how) {
                 wieldedType=UU.wield;
                 Invent[wieldedType].type = 0;
                 Invent[wieldedType].iarg=0;
-                adjustcvalues(wieldedObj.type, wieldedObj.iarg);
+                item_loss_action(wieldedObj);
                 UU.wield = -1;
             }
         }
@@ -901,7 +1020,7 @@ nearbymonst () {
 
     for (x = max(0, UU.x-1); x < min(MAXX, UU.x+2); x++) {
         for (y = max(0, UU.y-1); y < min(MAXY, UU.y+2); y++) {
-            if (Map[x][y].mon.id) {
+            if (at(x, y)->mon.id) {
                 return true; /* if monster nearby */
             }
         }
@@ -936,9 +1055,9 @@ stealsomething (int x, int y) {
 
     show_inv_item(index);
 
-    adjustcvalues(Invent[index].type, Invent[index].iarg);
+    item_loss_action(Invent[index]);
 
-    add_to_stolen (Invent[index], Lev);
+    add_to_stolen (Invent[index]);
 
     Invent[index] = NULL_OBJ;
 
@@ -961,105 +1080,28 @@ emptyhanded () {
 }
 
 
-/*
- *  function to change character levels as needed when dropping an object
- *  that affects these characteristics
- */
-void
-adjustcvalues (int itm, int arg) {
-    if (ispotion(obj(itm, arg))) {
-        return;
-    }/* if */
-
-    switch(itm) {
-
-    case ODEXRING:
-        UU.dexterity -= arg+1;
-        break;
-
-    case OSTRRING:
-        UU.strextra  -= arg+1;
-        break;
-
-    case OCLEVERRING:
-        UU.intelligence -= arg+1;
-        break;
-
-    case OHAMMER:
-        UU.dexterity -= 10;
-        UU.strextra -= 10;
-        UU.intelligence = UU.intelligence_pre_hammer;
-        break;
-
-    case OORB:
-        UU.orb = false;
-        UU.awareness--;
-        break;
-
-    case OSWORDofSLASHING:
-        UU.dexterity -= 5;
-        break;
-
-    case OSLAYER:
-        UU.intelligence -= 10;
-        break;
-
-    case OPSTAFF:
-        UU.wisdom -= 10;
-        break;
-
-    case OORBOFDRAGON:
-        --UU.slaying;
-        return;
-
-    case OSPIRITSCARAB:
-        --UU.negatespirit;
-        return;
-
-    case OCUBE_of_UNDEAD:
-        --UU.cube_of_undead;
-        return;
-
-    case ONOTHEFT:
-        --UU.notheft;
-        return;
-
-    case OLARNEYE:
-        UU.eyeOfLarn = 0;
-        if (UU.blindCount == 0) {
-            say("Your sight fades for a moment...\n");
-            nap(2000);
-            update_display();
-            say("Your sight returns but everything looks dull and faded.\n");
-        }
-        return;
-    }
-
-    raise_min(3);
-}/* adjustcvalues */
-
-
 /* Ensure that the base stats are at least 'min'. */
 void
-raise_min(int min) {
-    UU.strength     = (UU.strength < min)     ? min : UU.strength;
-    UU.intelligence = (UU.intelligence < min) ? min : UU.intelligence;
-    UU.wisdom       = (UU.wisdom < min)       ? min : UU.wisdom;
-    UU.constitution = (UU.constitution < min) ? min : UU.constitution;
-    UU.dexterity    = (UU.dexterity < min)    ? min : UU.dexterity;
-    UU.charisma     = (UU.charisma < min)     ? min : UU.charisma;
+raise_min(uint16_t min) {
+    strength_adjust_min(0, min);
+    intelligence_adjust_min(0, min);
+    wisdom_adjust_min(0, min);
+    constitution_adjust_min(0, min);
+    dexterity_adjust_min(0, min);
+    charisma_adjust_min(0, min);
 }/* raise_min*/
 
 /* Add 'val' to all base stats. */
 void
 add_to_base_stats(int val) {
-    UU.strength     += val;
-    UU.intelligence += val;
-    UU.wisdom       += val;
-    UU.constitution += val;
-    UU.dexterity    += val;
-    UU.charisma     += val;
+    strength_adjust(val);
+    intelligence_adjust(val);
+    wisdom_adjust(val);
+    constitution_adjust(val);
+    dexterity_adjust(val);
+    charisma_adjust(val);
 }/* add_to_base_stats*/
+
 
 /*
  *  function to calculate the pack weight of the player
@@ -1090,10 +1132,10 @@ packweight () {
 
 
 bool
-graduated(struct Player *p) {
+graduated() {
     int n;
     for (n = 0; n < EDU_LEVELS; n++) {
-        if (!p->courses[n]) return false;
+        if (!UU.courses[n]) return false;
     }/* for */
 
     return true;
@@ -1105,13 +1147,11 @@ graduated(struct Player *p) {
 // UU, truncating to 1 if the result would go negative.  Used for
 // stuff like scrolls of Time Warp or taking a course at U of Larn.
 //
-// As a special case, a time value of LONG_MIN (used for Permanence)
-// makes all active effects permanent by setting the field to
-// LONG_MAX.  This makes the counts more consistent and (hopefully)
-// better at highlighting bugs.
+// As a special case, a true value for make_permanent (and time == 0)
+// makes all active effects permanent.
 void
-adjusttime(long time) {
-    static long *time_change[] = {
+adjust_effect_timeouts(int32_t time, bool make_permanent) {
+    static int32_t *time_change[] = {
         &UU.hasteSelf, &UU.hero, &UU.altpro, &UU.protectionTime,
         &UU.dexCount, &UU.strcount, &UU.giantstr, &UU.charmcount,
         &UU.invisibility, &UU.cancellation, &UU.hasteSelf,
@@ -1122,47 +1162,56 @@ adjusttime(long time) {
 
         NULL};
 
+    // Ensure the caller didn't accidently set make_permanent to true.
+    ASSERT(!make_permanent || time == 0);
+
     for (int j = 0; time_change[j]; j++) { /* adjust time related parameters */
         // We only affect active stats
         if (*time_change[j] == 0) { continue; }
 
-        // We treat LONG_MIN as special so that Permanance will give
-        // them all the same countdown.
-        if (time == LONG_MIN) {
-            *time_change[j] = LONG_MAX;
-            continue;
-        }// if
-
-        // If the update can take the result negative, just set it to
-        // 1 and let the call to regen() finish it off.
-        if (*time_change[j] < time + 1) {
-            *time_change[j] = 1;
+        // Permanence doesn't affect holdmonster.
+        if (make_permanent && time_change[j] == &UU.holdmonst) {
             continue;
         }
 
-        // Otherwise, do a straight update.  We offset by one because
-        // regen() will do the final iteration.
+        // We make stats permanent by setting them to very high values
+        // which can't run out in the life of the game.  This is
+        // around 10 million mobuls.  (I used to use INT32_MAX but
+        // this caused the scroll of timewarp to sometimes overflow
+        // the counts and lose permanent stats.)
+        if (make_permanent) {
+            *time_change[j] = INT32_MAX/2;
+            continue;
+        }// if
+
+        // We offset by one because regen() will do the final
+        // iteration.
         *time_change[j] -= (time - 1);
+
+        // If the update took the result negative, just set it to 1
+        // and let the call to regen() finish it off.
+        if (*time_change[j] < 1) {
+            *time_change[j] = 1;
+            continue;
+        }
     }/* for */
 
     regen();
-}/* adjusttime*/
+}/* adjust_effect_timeouts*/
 
 
 
 // Update time-based things (e.g. regenerate hitpoints and spells or
 // decrease temporary effects like walk-through-walls or blindness.)
+//
+// This is expected to be called *before* recalc().
 void
 regen() {
-#   define DECR(n) if(n) --n
+#   define DECR(n) if(n) { --n; }
 
     if (UU.timestop)  {
         if(--UU.timestop <= 0) return;
     }   /* for stop time spell */
-
-    if (UU.strength<3) {
-        UU.strength=3;
-    }
 
     // Advance time.  hasteSelf halves it but timestop stops it completely.
     if (UU.timestop == 0 && UU.hasteSelf % 2 == 0) {
@@ -1175,41 +1224,26 @@ regen() {
 
         if (UU.regencounter <= 0) {
             UU.regencounter = 22 + (2 * (int)UU.challenge) - UU.level;
-            UU.hp = min(UU.hp + UU.cached_regen_rate, UU.hpmax);
+
+            long rate = 1 + carrymod(OREGENRING) + carrymod(ORINGOFEXTRA);
+            UU.hp = min(UU.hp + rate, UU.hpmax);
         }// if
     }// if
 
     if (UU.spells < UU.spellmax && UU.ecounter-- <= 0) { // regenerate spells
         UU.ecounter = 100 + 4 * ((int)UU.challenge - UU.level
-                                 - UU.cached_spell_regen_boost);
+                                 - carrymod(OENERGYRING));
         UU.spells++;
     }
 
-    if (UU.hero)
-        if (--UU.hero <= 0) {
-            add_to_base_stats(-10);
-        }
-    if (UU.coked)
-        if (--UU.coked<=0) {
-            add_to_base_stats(-34);
-        }
-    if (UU.altpro)
-        if (--UU.altpro<=0) {
-            UU.moredefenses-=3;
-        }
-    if (UU.protectionTime)
-        if (--UU.protectionTime<=0) {
-            UU.moredefenses-=2;
-        }
-    if (UU.dexCount)
-        if (--UU.dexCount<=0)   {
-            if ( (UU.dexterity-=3) < 3 )
-                UU.dexterity = 3;
-        }
-    if (UU.strcount)
-        if (--UU.strcount<=0)   {
-            UU.strextra-=3;
-        }
+    DECR(UU.hero);
+    DECR(UU.coked);
+    DECR(UU.altpro);
+
+    DECR(UU.protectionTime);
+    DECR(UU.dexCount);
+    DECR(UU.strcount);
+
     if (UU.blindCount)
         if (--UU.blindCount<=0) {
             say("The blindness lifts.\n");
@@ -1220,10 +1254,8 @@ regen() {
             say("You regain your senses.\n");
             headsup();
         }
-    if (UU.giantstr)
-        if (--UU.giantstr<=0) {
-            UU.strextra -= 20;
-        }
+
+    DECR(UU.giantstr);
 
     DECR(UU.charmcount);
     DECR(UU.invisibility);
@@ -1241,41 +1273,32 @@ regen() {
     DECR(UU.enlightenment.time);
     DECR(UU.monster_detection);
 
-    if (UU.globe)
-        if (--UU.globe<=0) {
-            UU.moredefenses-=10;
-        }
+    DECR(UU.globe);
 
-    if (UU.awareness)
-        if(!UU.orb)
-            --UU.awareness;
+    // Posessing the Orb of Awareness both preserves the existing
+    // awareness count and ensures that you currently have Awareness.
+    if (!has_a(OORB)) {
+        DECR(UU.awareness);
+    }
+
     if (UU.halfdam)
         if (--UU.halfdam<=0)  {
             say("You now feel better.\n");
             headsup();
         }
-    if (UU.seeinvisible)  {
-        int i;
-        for (i=0;i<IVENSIZE;i++)
-            if (Invent[i].type==OAMULET) {
-                i=999;
-                break;
-            }
-        if (i!=999)
-            if (--UU.seeinvisible<=0) {
-                MonType[INVISIBLESTALKER].mapchar=Types[0].symbol;
-                say("Your vision returns to normal.\n");
-                headsup();
-            }
+
+    if (UU.seeinvisible && !has_a(OAMULET) ) {
+        if (--UU.seeinvisible <= 0) {
+            say("Your vision returns to normal.\n");
+            headsup();
+        }
     }
 
     if (UU.itching) {
-        if (UU.itching > 1 && (UU.wear!= -1 || UU.shield!= -1) && rnd(100)<50){
-            UU.wear=UU.shield= -1;
-            say("The hysteria of itching forces you to remove \n"
-                   "your armor!");
+        if (UU.itching > 1 &&(UU.wear != -1 || UU.shield != -1)&& rnd(100)<50){
+            UU.wear = UU.shield = -1;
+            say("The hysteria of itching forces you to remove your armor!\n");
             headsup();
-            recalc();
         }
 
         if (--UU.itching<=0) {
@@ -1286,7 +1309,7 @@ regen() {
     if (UU.clumsiness) {
         if (UU.wield != -1)
             if (UU.clumsiness>1)
-                if (Map[UU.x][UU.y].obj.type==0)/* if nothing there */
+                if (at(UU.x, UU.y)->obj.type==0)/* if nothing there */
                     if (rnd(100)<33) /* drop your weapon */
                         drop_object((int)UU.wield);
         if (--UU.clumsiness<=0) {
@@ -1408,12 +1431,12 @@ loselevel () {
  *  subroutine to increase experience points
  */
 void
-raiseexperience (long points) {
+raiseexperience (int points) {
     bool levelChanged = false;
 
     UU.experience += points;
     while (UU.experience >= skill[UU.level] && (UU.level < MAXPLEVEL)) {
-        int hpincr = max (1, (UU.constitution - UU.challenge) >> 1);
+        int hpincr = max (1, (constitution() - UU.challenge) >> 1);
 
         UU.level++;
         raisemhp(rnd(3) + rnd(hpincr));
@@ -1422,28 +1445,28 @@ raiseexperience (long points) {
         levelChanged = true;
 
         if (UU.level < 7 - UU.challenge)
-            raisemhp((int)(UU.constitution>>2));
+            raisemhp(constitution() >> 2);
 
         /* if we changed levels */
         switch ((int)UU.level) {
         case 94:    /* earth guardian */
-            UU.wtw = LONG_MAX;
+            UU.wtw = INT32_MAX;
             break;
         case 95:    /* air guardian */
-            UU.invisibility = LONG_MAX;
+            UU.invisibility = INT32_MAX;
             break;
         case 96:    /* fire guardian */
-            UU.fireresistance = LONG_MAX;
+            UU.fireresistance = INT32_MAX;
             break;
         case 97:    /* water guardian */
-            UU.cancellation = LONG_MAX;
+            UU.cancellation = INT32_MAX;
             break;
         case 98:    /* time guardian */
-            UU.hasteSelf = LONG_MAX;
+            UU.hasteSelf = INT32_MAX;
             break;
         case 99:    /* ethereal guardian */
-            UU.stealth = LONG_MAX;
-            UU.spiritpro = LONG_MAX;
+            UU.stealth = INT32_MAX;
+            UU.spiritpro = INT32_MAX;
             break;
         case 100:
             say("You are now The Creator!\n");
@@ -1451,11 +1474,10 @@ raiseexperience (long points) {
             set_reveal(true);
 
             for (int i=0; i<SPNUM; i++) {
-                GS.spellknow[i] = true;
+                UU.spellknow[i] = true;
             }
-            for (int i=0; i < OBJ_CONCRETE_COUNT; i++) {
-                Types[i].isKnown = true;
-            }// for
+
+            identify_all();
             break;
         }/* switch */
     }/* while */
@@ -1470,7 +1492,7 @@ raiseexperience (long points) {
  *  subroutine to lose experience points
  */
 void
-loseexperience (long x) {
+loseexperience (int x) {
     int i,tmp;
 
     i = UU.level;
@@ -1479,10 +1501,10 @@ loseexperience (long x) {
     while (UU.experience < skill[UU.level-1]) {
         if (--UU.level <= 1)
             UU.level=1; /*  down one level      */
-        tmp = (UU.constitution-UU.challenge)>>1; /* lose hpoints */
+        tmp = (constitution()-UU.challenge)>>1; /* lose hpoints */
         losemhp((int)rnd(tmp > 0 ? tmp : 1));   /* lose hpoints */
         if (UU.level < 7-UU.challenge)
-            losemhp((int)(UU.constitution>>2));
+            losemhp((int)(constitution()>>2));
         losemspells((int)rund(3));  /*  lose spells */
     }
     if (i != UU.level) {

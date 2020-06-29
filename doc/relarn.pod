@@ -4,7 +4,7 @@ relarn - Explore the Caves of Larn
 
 =head1 SYNOPSIS
 
-relarn [ -i ] [ -s ] [ -n ] [ -h ] [ -v] [ -b] [ -o filename ] [ -d num ]
+relarn       [ -i ] [ -s ] [ -n ] [ -h ] [ -v] [ -b] [ -o filename ] [ -d num ]
 
 =head1 DESCRIPTION
 
@@ -16,44 +16,18 @@ there are significant differences between the games, the majority of
 the changes are internal.
 
 Running C<relarn> with no arguments will continue the current game or
-start a new via a set of menus.  Once the game begins, online help is
-available via the '?' key; that should be sufficient for playing the
-game.  This will show all of the available commands.
+start a new one via a set of menus.  Once the game begins, online help
+is available via the '?' key.
 
-Players who successfully finish the game (i.e. win it) will receive
-fake game-related email messages in the file F<~/.relarn/inbox>, a
-mail folder in the C<mbox> format.  If an email client has been
-configured, it will also be launched just before relarn exits.
+=head1 WARNING
 
-(C<Ularn> would send you actual email; back in those days, that worked
-reliably on most Unix systems.)
+Save files are not compatible across versions.  Upgrading ReLarn will
+render your existing games unplayable.  The exception to this is
+upgrading to to a version with a higher patch level (i.e. the
+rightmost version number).
 
-ReLarn also maintains a score file which can be viewed using the B<-i>
-and B<-s> options.  This will display the scores of only the winning
-players and of all players respectively.
-
-On startup, C<relarn> looks for a configuration file at
-F<~/.relarn/relarnrc> and if present, reads it.  A documented sample
-can be found at F<share/relarn/doc/relarnrc.sample>.
-
-Unlike other Roguelikes for Unix, C<ReLarn> will not prevent cheating
-by users with different accounts on the same computer.  The scoreboard
-is world-writable and saved games are stored in the player's home
-directory with no anti-tampering mechanism in place.  If cheating is a
-problem (e.g. if you're running a tournament), you will need to limit
-users' access to the computer hosting the game.
-
-Related to this, C<relarn> has a debugging mode that is active when
-the program can determine that its executable is writable by the
-current user.  Note that this means the executable must be invoked
-with an explicit path rather than using the system path.  Debug
-features are accessible via a menu that can be brought up by pressing
-the underscore (C<_>) key.  The concept of "wizard mode" from Ularn
-remains but can be toggled from the menu; see the source code to see
-how it can be useful.
-
-ReLarn currently only supports TTY graphics via the C<ncurses>
-library.  Future releases may support other interfaces as well.
+So going from 2.0.0 to 2.1.0 means abandoning your current game while
+going from 2.1.0 to 2.1.2 should work.
 
 
 =head1 OPTIONS
@@ -65,18 +39,23 @@ library.  Future releases may support other interfaces as well.
 Displays the scoreboard (if present). B<-i> shows only the winners'
 scoreboard while B<-s> shows the whole thing.
 
-=item -n
+=item -w I<filename>
 
-Suppresses the introductory text.
+Writes the scores to the file at I<filename> as a set of rows of
+tab-delimited lines.  If I<filename> is C<-> (a minus sign), the
+results will be written to standard output on those platforms that
+support this.
 
 =item -o I<filename>
 
-Specifies a supplementary config file. This is read in after the
-default config file and can override it.
+Specifies a supplementary config file.  This is read in immediately
+and so can override previous command-line options or the default
+config file which is read first.  Subsequent options will override it.
 
-=item -d I<difficulty level>
+=item -f I<filename>
 
-Specifies the difficulty level when starting a new game.
+Specifies an alternate font file to use.  This is ignored when running
+on a terminal.
 
 =item -b
 
@@ -90,39 +69,190 @@ Print argument help or the version number and exit.
 
 =back
 
-=head1 FILES
 
-ReLarn uses a number of files in your home directory.  These are:
+=head1 WINDOWED MODE
+
+Traditionally, ReLarn has been a TTY (i.e. text console) game just
+like its predecessors.  However, as of version 2.2.0 there is also a
+windowed version available for most platforms (via SDL and PDCurses).
+This is the only version available on (plain, non-Cygwin) Microsoft
+Windows.
+
+Note that currently, you will need to install both versions to use
+both interfaces.  However, both builds are save- and
+configuration-file compatible.
+
+
+=head1 PLAYER FILES
+
+ReLarn keeps most of the files related to an individual player in a
+directory named F<.relarn> in the player's home directory (except on
+Windows where it's in F<ReLarn> in F<Documents>).
+
+This directory is created the first time ReLarn is started and is
+seeded with an initial configuration file.
+
+(It's also where the save files are, if you feel like cheating.)
+
+=head2 Note to Microsoft Windows users
+
+If you have put your Documents folder in a non-standard place or there
+are non-ASCII characters in the path, ReLarn may have trouble finding
+it.  In this case (or you just want a different location), set the
+environment variable `RELARN_CONFIG_HOME` to the absolute path of
+whichever folder you want to use.  Note that this path needs to be
+pure 7-bit ASCII; Unicode characters may not work.
+
+
+=head1 CONFIGURATION
+
+On startup, C<relarn> looks for a configuration file at
+F<~/.relarn/relarnrc> (F<Documents\ReLarn\relarnrc> on Windows) and if
+present, reads it.  Editing this file lets you set a wide variety of
+options including disabling various advanced features and setting your
+preferred character attributes.
+
+If no relarnrc file is present, ReLarn will copy the stock
+configuration file (with all options commented-out) into
+F<~/.relarn>. The comments in the default configuration file
+thoroughly document the options; read it for more details.
+
+
+=head1 COLOURS
+
+ReLarn attempts to make use of colour displays whenever they are
+available while still being playable on a monochrome terminal.
+Because there is significant variability in the colour capabilities of
+modern terminal emulators, this can get complicated.
+
+TL;DR:
 
 =over
 
-=item F<~/.relarn/> is the main config directory; also holds save files.
+=item 1. If you're using the native windowed version, you're good. Otherwise,
 
-=item F<~/.relarn/relarnrc> is the default configuration file.
+=item 2. Set your console background to something NOT black or white.
 
-=item F<~/.relarn/inbox> is the mail folder; it will be created if not present.
+=item 3. Set C<dark-screen> if console background is dark.
+
+=item 4. If you want to do something clever, keep reading.
 
 =back
 
-The are also some relevant files in F<$RELARN_INSTALL_ROOT/share/relarn/doc>.
+In general, there are four classes of display: monochrome terminals,
+colour terminals, colour terminals with remappable palettes and native
+(GUI) windows.
 
-=head1 ENVIRONMENT
+On monochrome terminals, ReLarn is restricted to text attributes
+(bright, dim, reverse-video).  It will not be able to display the
+field of view or unexplored squares, which is equivalent to disabling
+C<show-unrevealed> and C<show-fov> in the settings.  This is
+inconvenient but doesn't really hinder game play. (And anyway, if you
+wanted convenient, you wouldn't be messing around with a VT100).  If
+your display is light-on-dark, you may wish to set C<dark-screen> in
+the settings to get slightly better display choices.
 
-C<relarn> searches for its resource files relative to a root directory
-that is set at compile time.  This default can be overridden by
-setting the environment variable C<RELARN_INSTALL_ROOT>.  This is
-usually done by a wrapper script.
+If your terminal displays the eight colours supported by ncurses, it
+will almost certainly be a software terminal emulator of some kind
+(e.g. xterm, Terminal, mintty, etc.)  One nice feature of these is
+that the default background colour in your terminal window is
+different from the standard (ISO-6429) BLACK and WHITE supported by
+the protocol.  ReLarn uses this feature to get an extra background
+colour; the default background is a location you've seen while WHITE
+(or BLACK if C<dark-screen> has been set) shows an unexplored
+location.  Of course, this doesn't help if you've set your terminal
+background to pure black or pure white, so I recommend setting it to a
+different shade.  Your eyes will thank you too.
+
+You should also set C<dark-screen> on terminals with dark backgrounds
+because this will make objects in your (bright yellow) field of view
+easier to see.
+
+If your terminal has a remappable colour palette, you can redefine
+some or all of your colours using the C<colors:> config line in your
+C<relarnrc>.  Note that this will B<not> modify the default foreground
+and background colours.  However, if you want to stay with default
+black or white, you can change the tint of unexplored squares easily
+this way.  Or, you know, make it look prettier.
+
+(If you're using an actual physical terminal to play ReLarn, a) cool!
+and b) your best option is probably to try using C<colors:> if your
+terminal supports that.  That or pretend it's the 80s when eight
+colours were enough for everybody.  Either way, let me know if
+anything works.)
+
+Finally, on native (i.e. windowed) displays, the defaults are pretty
+good and you should just use those.  If you B<do> want something
+different, the B<colors:> directive will also work, with some caveats.
+
+In GUI windows, there is no default background or foreground so black
+and white palette colours are used instead.  Since this now masks the
+unexplored square colour, magenta (which has been remapped to
+something less garish) is used for that instead.  C<dark-screen> is
+the default here; if you want to override it, you can set
+C<light-screen>.
+
+The windowed version will also let you specify a (fixed-width) font.
+
+
+=head1 EMAIL
+
+Classic (U)Larn running on a shared Unix system would send you email
+if you won the game.  Unfortunately, this is no longer an option for
+most people so ReLarn recreates this experience by writing the
+messages to an C<mbox> file named F<inbox> in your player directory.
+
+If you have configured an email client or C<mbox> reader in
+F<relarnrc> via C<email-client:> or C<gui-email-client:>, it will also
+launch that program.
+
+Note to Windows users: it is B<really> hard to find a mail client that
+will display an mbox file passed to it on the command line.  Sorry.
+C<notepad> will probably be fine.
+
+
+=head1 SCORES
+
+ReLarn also maintains a system-wide score board which can be viewed
+using the B<-i> and B<-s> options.  This will display the scores of
+only the winning players and of all players respectively.  They can
+also be written to a file with B<-w>.
+
+(This made more sense when everyone was playing Larn on their school's
+Unix system instead of studying but it's still feasible on modern *nix
+systems.  You B<probably> can't share a scorefile between accounts on
+a Windows system, though.)
+
+Note that unlike other Roguelike games, ReLarn does not use operating
+system permissions (or anything else) to prevent cheating so the score
+file is editable by everyone.  If you need local anti-cheating, you
+will need to implement that yourself.
+
+
+=head2 Note to macOS users
+
+If you are using the (experimental) App bundle, your score file will
+be stored within the bundle itself, so different people with different
+accounts on the same computer need to be running the same app bundle
+to share scores.
+
+(This is considered bad practice for macOS developers but I'm just a
+Unix dev so it doesn't count.)
+
+In this case, there also isn't an easy way to show the scores by
+themselves.  You will need to run
+F<ReLarn.app/Contents/MacOS/bin/relarn> with the options above.
 
 
 =head1 AUTHOR, COPYRIGHT, LICENSING
 
-ReLarn is Copyright (C) 1986-2019 The Authors and is Free Software
+ReLarn is Copyright (C) 1986-2020 The Authors and is Free Software
 under the terms of the GNU General Public License version 2.0.  There
 is NO WARRANTY, to the extent permitted by law.
 
-ReLarn was derived from Ularn by Chris Reuter.  Ularn was derived from
-Larn by Phil Cordier and others. Larn was written by Noah Morgan with
-other collaborators.
+ReLarn was created by Chris Reuter and is derived from Ularn 1.5-ish.
+Ularn was derived from Larn by Phil Cordier and others. Larn was
+written by Noah Morgan with other collaborators.
 
 See the included files F<Copyright.txt>, F<LICENSE.txt> and
 F<AUTHORS.txt> for more details.
@@ -131,6 +261,29 @@ Pop culture artifacts referenced in ReLarn are the properties of their
 respective owners.  Mentions in the game or documention are not
 intended to imply any kind of relationship with the rights holders.
 
+
+
 =head1 BUGS
 
 There are no bugs in ReLarn, only alternative features.
+
+Some known alternative features:
+
+=over
+
+=item ReLarn does not know about Unicode.
+
+If your system uses UTF-8, this may not be a problem since UTF-8 looks
+like ASCII to this poor dumb software and it (hopefull) gets passed
+right through.  However, if you're using an OS with some wierd
+Byzantine set of mutually incompatible encoding schemes for things
+like paths and environment variables, that may give you trouble.
+
+=item Try to avoid closing the game window in windowed mode.
+
+ReLarn is a bit iffy on its ability to handle this situation and
+closing the window at just the wrong time may corrupt or lose your
+savefile.
+
+=back
+

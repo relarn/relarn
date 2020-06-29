@@ -1,10 +1,14 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "school.h"
 
 #include "internal_assert.h"
 #include "constants.h"
+#include "util.h"
+#include "player.h"
+#include "picklist.h"
+#include "ui.h"
 
 
 #define EDU_COST 250
@@ -68,7 +72,7 @@ oschool() {
         return;
     }/* if */
 
-    if (graduated(&UU)) {
+    if (graduated()) {
         say("You've already graduated.\n");
         return;
     }/* if */
@@ -115,7 +119,7 @@ take_course(int courseNum) {
     say("%s\n", cp->message);
 
     /* And notify the player if they are now a graduate. */
-    if (graduated(&UU)) {
+    if (graduated()) {
         say("Congratulations! You have graduated with a BH (Bachelor of "
             "Heroism).\n");
         struct Object diploma = obj(ODIPLOMA, 0);
@@ -136,12 +140,12 @@ apply_effects(const char *effects) {
         int offset = (int)*(p + 1) - '0';
 
         switch (*p) {
-        case 's' : UU.strength += offset;       break;
-        case 'o' : UU.constitution += offset;   break;
-        case 'i' : UU.intelligence += offset;   break;
-        case 'w' : UU.wisdom += offset;         break;
-        case 'c' : UU.charisma += offset;       break;
-        case 'd' : UU.dexterity += offset;      break;
+        case 's' : strength_adjust(offset);       break;
+        case 'o' : constitution_adjust(offset);   break;
+        case 'i' : intelligence_adjust(offset);   break;
+        case 'w' : wisdom_adjust(offset);         break;
+        case 'c' : charisma_adjust(offset);       break;
+        case 'd' : dexterity_adjust(offset);      break;
         default: FAIL("Internal error: Invalid effect.");
         }/* switch */
     }/* for */
@@ -171,7 +175,7 @@ elapse_time(int num_turns) {
     }/* if */
 
     /* adjust parameters for time change */
-    adjusttime(num_turns);
+    adjust_effect_timeouts(num_turns, false);
 }/* elapse_time*/
 
 

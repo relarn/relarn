@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -50,7 +50,7 @@ SPELL(CVPROCK,        "vpr", "vaporize rock",         "Changes rock to air")
 SPELL(CDRY,           "dry", "dehydration",           "Dries up water in the immediate vicinity")
 SPELL(CLIGHTNING,     "lit", "lightning",             "Causes the caster's finger to emit lightning bolts")
 SPELL(CDRAIN,         "drl", "drain life",            "Subtracts hit points from both you and a monster")
-SPELL(CINVULN,        "glo", "invulnerability",       "Protects the player from physical attack")
+SPELL(CINVULN,        "glo", "invulnerable globe",    "Summons a protective globe around you.")
 SPELL(CFLOOD,         "flo", "flood",                 "Floods the immediate chamber")
 SPELL(CFINGER,        "fgr", "finger of death",       "Calls on your god to back you up")
 SPELL(CSCAREMON,      "sca", "scare monster",         "Terrify the monster")
@@ -60,7 +60,7 @@ SPELL(CTELEPORT,      "tel", "teleport away",         "Teleports a monster ...ho
 SPELL(CMAGICFIRE,     "mfi", "magic fire",            "Creates a curtain of fire around the caster")
 SPELL(CMKWALL,        "mkw", "make a wall",           "Makes a wall in the place you specify")
 SPELL(CSPHERE,        "sph", "sphere of annihilation","Creates an extremely dangerous ball of chaos")
-SPELL(CGENOCIDE,      "gen", "genocide",              "Eliminates a species -- use sparingly.")
+SPELL(CBANISH,        "ban", "banish",                "Removes a species from the land -- use sparingly.")
 SPELL(CSUMMON,        "sum", "summon demon",          "Summons a demon to (hopefully) help you out")
 SPELL(CWALLWALK,      "wtw", "walk through walls",    "Allows the player to walk through walls")
 SPELL(CALTER_REALITY, "alt", "alter reality",         "God only knows what this will do")

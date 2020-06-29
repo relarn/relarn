@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // This file holds most of the global constants
@@ -31,22 +31,13 @@
 
 
 //
-// Names of player-side config files
-//
-#define BASE_CFGDIR     ".relarn"
-#define BASE_SAVE       "relarn.sav"
-#define BASE_CFG        "relarnrc"
-#define BASE_MAILBOX    "inbox"
-
-
-//
 // Environment variables
 //
 #define VAR_PATH        "RELARN_INSTALL_ROOT"
 
 
 #define COPYRIGHT                                                       \
-  "ReLarn Copyright (C) 1986-2019 by The Authors.\n"                    \
+  "ReLarn Copyright (C) 1986-2020 by The Authors.\n"                    \
   "ReLarn comes with ABSOLUTELY NO WARRANTY.\n"                         \
   "You may redistribute copies of ReLarn\n"                             \
   "under the terms of the GNU General Public License.\n"                \

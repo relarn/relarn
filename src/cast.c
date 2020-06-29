@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "cast.h"
@@ -9,6 +9,8 @@
 #include "sphere.h"
 #include "movem.h"
 #include "game.h"
+#include "gender.h"
+#include "ui.h"
 
 #include <limits.h>
 
@@ -30,7 +32,7 @@ static void omnidirect(enum SPELL spell, int dam, char *str);
 static void tdirect(void);
 static void makewall(void);
 static void vaporizerock(void);
-static DIRECTION dirsub(int *x, int *y);
+static DIRECTION dirsub(int8_t *x, int8_t *y);
 static void alter_reality(void);
 static int isconfuse(void);
 static void loseint(void);
@@ -64,7 +66,7 @@ pickspell (enum PICKMODE mode) {
         char letter;
         char desc[100];
 
-        if (known != GS.spellknow[n]) continue;
+        if (known != UU.spellknow[n]) continue;
 
         snprintf (desc, sizeof(desc), "%-20s %s", Spells[n].name,
                   Spells[n].desc);
@@ -72,10 +74,10 @@ pickspell (enum PICKMODE mode) {
         pl_add (picker, n, letter, desc);
     }/* for */
 
-    heading = mode == PM_CAST  ? "Cast which spell?"  : 
+    heading = mode == PM_CAST  ? "Cast which spell?"  :
               mode == PM_LEARN ? "Learn which spell?" :
                                  "-=*=-";
-                 
+
     pick_item (picker, heading, &result);
 
     pl_free(picker);
@@ -86,7 +88,7 @@ pickspell (enum PICKMODE mode) {
 
 
 /*
- * Subroutine called by play_turn to cast a spell for the user 
+ * Subroutine called by play_turn to cast a spell for the user
  */
 void
 cast() {
@@ -121,7 +123,7 @@ spelldamage(enum SPELL spell) {
         return;
     }           /* not if time stopped */
 
-    if ((rnd(23) == 7) || (rnd(18) > UU.intelligence)) {
+    if ((rnd(23) == 7) || (rnd(18) > intelligence())) {
         say("It didn't work!\n");
         return;
     }/* if */
@@ -135,8 +137,7 @@ spelldamage(enum SPELL spell) {
         /* ----- LEVEL 1 SPELLS ----- */
 
     case CPROT:
-        if (UU.protectionTime == 0)
-            UU.moredefenses += 2;   /* protection field +2 */
+        say("You feel safer.\n");
         UU.protectionTime += 250;
         return;
 
@@ -149,8 +150,7 @@ spelldamage(enum SPELL spell) {
     }
 
     case CDEX:     /* dexterity     */
-        if (UU.dexCount == 0)
-            UU.dexterity += 3;
+        say("You feel a little lighter on your feet.\n");
         UU.dexCount += 400;
         return;
 
@@ -165,11 +165,12 @@ spelldamage(enum SPELL spell) {
     }
 
     case CCHARM:     /* charm monster */
-        UU.charmcount += UU.charisma * 2;
+        say("You feel %s.\n", pretty(UU.gender));
+        UU.charmcount += charisma() * 2;
         return;
 
     case CSSPEAR:     /* sonic spear */
-        godirect(spell, rnd(10) + 15 + UU.level, 
+        godirect(spell, rnd(10) + 15 + UU.level,
                  "The sound damages the %s.", 70, '@');
         return;
 
@@ -182,43 +183,54 @@ spelldamage(enum SPELL spell) {
     }
 
     case CSTR:
-        if (UU.strcount == 0)
-            UU.strextra += 3;   /* strength */
+        say("Everything feels a little lighter.\n");
         UU.strcount += 150 + rnd(100);
         return;
 
-    case CENLIGHTEN: 
+    case CENLIGHTEN:
         enlighten(10, rnd(3));
         return;
 
     case CHEALING:     /* healing */
+        say("You feel better.\n");
         raisehp(20 + (UU.level << 1));
         return;
 
     case CCBLIND:        /* cure blindness    */
+        say("%s\n", UU.blindCount  ?
+            "You can see again." :
+            "Your eyes feel rested but nothing else has changed.");
         UU.blindCount = 0;
         return;
 
     case CCREATEMON:
         createmonster(makemonst(getlevel() + 1) + 8);
+        say("Poof!\n");
         return;
 
     case CPHANTASM:
-        if (rnd(11) + 7 <= UU.wisdom)
+        if (rnd(11) + 7 <= wisdom()) {
             direct(spell, rnd(20) + 20 + UU.level, "The %s believed!", 0);
-        else
-            say("It didn't believe the illusions!");
+        } else {
+            say("It didn't believe the illusions!\n");
+        }
         return;
 
 
-    case CINV: {       /* if he has the amulet of invisibility then
-                        * add more time */
-        int i, j;
+    case CINV: {
+        say("You %s yourself turning%s transparent.\n",
+            UU.blindCount ? "feel" : "see",
+            UU.invisibility ? " slightly more" : "");
 
-        for (j = i = 0; i < IVENSIZE; i++)
-            if (Invent[i].type == OAMULET)
-                j += 1 + Invent[i].iarg;
-        UU.invisibility += (j << 7) + 12;
+        UU.invisibility += 12;
+
+        // If they have the amulet of invisibility, then add more time.
+        int idx = index_of_first(OAMULET);
+        if (idx >= 0) {
+            int extra = 1 + Invent[idx].iarg;
+            UU.invisibility += extra << 7;
+        }// if
+
         return;
     }
 
@@ -238,10 +250,12 @@ spelldamage(enum SPELL spell) {
         return;
 
     case CCANCEL:      /* cancellation  */
+        say("Colors fade for a brief moment.\n");
         UU.cancellation += 5 + UU.level;
         return;
 
     case CHASTE:        /* haste self    */
+        say("The world seems to slow down.\n");
         UU.hasteSelf += 7 + UU.level;
         return;
 
@@ -250,6 +264,7 @@ spelldamage(enum SPELL spell) {
         return;
 
     case CVPROCK:        /* vaporize rock */
+        say("The surrounding rock seems to melt.\n");
         vaporizerock();
         return;
 
@@ -266,18 +281,25 @@ spelldamage(enum SPELL spell) {
     case CDRAIN: {       /* drain life */
         int i;
 
+        // From iLarn:
+
         i = min(UU.hp - 1, UU.hpmax / 2);
-        direct(spell, i + i, "", 0);
+        direct(spell, i + i, "A life-sapping force surrounds the %s,"
+               " like a really bad sitcom.", 0);
+
         UU.hp -= i;
         return;
     }
 
-    case CINVULN:
-        if (UU.globe == 0)
-            UU.moredefenses += 10;
+    case CINVULN: {
+        bool new_globe = UU.globe == 0;
+        say("Your head hurts as %s transparent globe %s around you.\n",
+            new_globe ? "a" : "the",
+            new_globe ? "forms" : "strengthens");
         UU.globe += 200;
         loseint();  /* globe of invulnerability */
         return;
+    }
 
     case CFLOOD:        /* flood */
         omnidirect(spell, 32 + UU.level,
@@ -292,16 +314,17 @@ spelldamage(enum SPELL spell) {
             game_over_probably(DDFINGER);
             return;
         }
-        if (UU.wisdom > rnd(10) + 10)
+        if (wisdom() > rnd(10) + 10)
             direct(spell, 2000,
                    "The %s's heart stopped.", 0);
         else
-            say("It didn't work.");
+            say("It didn't work.\n");
         return;
 
         /* ----- LEVEL 5 SPELLS ----- */
 
     case CSCAREMON: {        /* scare monster */
+        say("You feel incredibly badass!\n");
         UU.scaremonst += rnd(10) + UU.level;
 
         /* if have HANDofFEAR make last longer */
@@ -312,10 +335,12 @@ spelldamage(enum SPELL spell) {
     }
 
     case CHOLDMON:        /* hold monster */
+        say("The cave becomes eerily quiet.\n");
         UU.holdmonst += rnd(10) + UU.level;
         return;
 
     case CTIMESTOP:
+        say("\"Time stand still...\"\n");
         UU.timestop += rnd(20) + (UU.level << 1);
         return;     /* time stop */
 
@@ -334,10 +359,10 @@ spelldamage(enum SPELL spell) {
         return;
 
     case CSPHERE: {       /* sphere of annihilation */
-        int xl, yl, i;
+        int8_t xl, yl;
 
-        i = dirsub(&xl, &yl);   /* get direction of sphere */
-        if (i == DIR_CANCEL) return;
+        DIRECTION dir = dirsub(&xl, &yl);   /* get direction of sphere */
+        if (dir == DIR_CANCEL) return;
 
         if (rnd(23) == 5) {
             headsup();
@@ -347,12 +372,12 @@ spelldamage(enum SPELL spell) {
             return;
         }
         loseint();
-        newsphere(xl, yl, i, rnd(20) + 11); /* make a sphere */
+        newsphere(&UU.spherelist, xl, yl, dir); /* make a sphere */
         return;
     }
 
-    case CGENOCIDE:        /* genocide */
-        genmonst();
+    case CBANISH:        /* banish */
+        banmonst();
         return;
 
     case CSUMMON: {       /* summon demon */
@@ -363,10 +388,10 @@ spelldamage(enum SPELL spell) {
             return;
         }
         if (rnd(100) > 15) {
-            say("Nothing seems to have happened.");
+            say("Nothing seems to have happened.\n");
             return;
         }
-        say("The demon clawed you and vanished!");
+        say("The demon clawed you and vanished!\n");
         headsup();
         i = rnd(40) + 30;
         losehp(i, DDDEMON);  /* must say killed by a demon */
@@ -374,6 +399,7 @@ spelldamage(enum SPELL spell) {
     }
 
     case CWALLWALK:        /* walk through walls */
+        say("You feel phase-modulated.\n");
         UU.wtw += rnd(10) + 5;
         return;
 
@@ -382,54 +408,55 @@ spelldamage(enum SPELL spell) {
         return;
 
     case CPERMANENCE:        /* permanence */
-        adjusttime(LONG_MIN);
-        GS.spellknow[CPERMANENCE] = false;   /* forget */
+        say("that ought to do it...\n");
+        adjust_effect_timeouts(0, true);
+        UU.spellknow[CPERMANENCE] = false;   /* forget */
         loseint();
         return;
 
     default:
-        say("spell %d not available!", (long) spell);
+        // This shouldn't be reachable, but...
+        say("%d? You don't know that one.\n", (long) spell);
         headsup();
         return;
     }
 }/* spelldamage*/
 
 /*
- * Subtract 1 from your int (intelligence) if > 3 
+ * Subtract 1 from your int (intelligence) if > 3
  */
 static void
 loseint() {
-    if (--UU.intelligence < 3)
-        UU.intelligence = 3;
+    intelligence_adjust(-1);
 }/* loseint*/
 
 
 /*
- * isconfuse()      Routine to check to see if player is confused 
+ * isconfuse()      Routine to check to see if player is confused
  *
  * This routine prints out a message saying "You can't aim your magic!" returns
- * 0 if not confused, non-zero (time remaining confused) if confused 
+ * 0 if not confused, non-zero (time remaining confused) if confused
  */
 static int
 isconfuse() {
     if (UU.confuse) {
-        say(" You can't aim your magic!");
+        say("You can't aim your magic!\n");
         headsup();
     }
     return (UU.confuse);
 }
 
 /*
- * Subroutine to return 1 if the spell can't affect the monster otherwise
- * returns 0. Enter with the spell number in x, and the monster number in
- * monst. 
+ * Subroutine to return 1 if the spell can't affect the monster
+ * otherwise returns 0. Enter with the spell number in 'spell', and
+ * the monster number in monst.
  */
 static int
 nospell(enum SPELL spell, int monst) {
     static const char *spellEffects[LAST_MONSTER+1][SPNUM];
     static bool spellEffectsInitialized = false;
     const char *msg;
-    
+
     /* bad spell or monst */
     ASSERT(spell < SPNUM && monst <= LAST_MONSTER && monst > 0 && spell >= 0);
 
@@ -456,7 +483,7 @@ nospell(enum SPELL spell, int monst) {
                 spellEffects[mon][spell] = mondesc[n].msg;
             }/* for */
         }/* for */
-        
+
         spellEffectsInitialized = true;
     }/* if */
 
@@ -482,31 +509,34 @@ nospell(enum SPELL spell, int monst) {
  */
 void
 godirect(enum SPELL spnum, int dam, char *str, int delay, char cshow) {
-    int x, y;
-    int dx, dy;
+    int8_t x, y;
+    int8_t dx, dy;
 
     if (isconfuse()) {
         return;
     }
 
-    // Set dx and dy to increment
+    // Set dx and dy to increment.  We bail if it's 0,0 because that
+    // means the player has tried to cast off the edge of the map.
     if (dirsub(&dx, &dy) == DIR_CANCEL) return;
+
     dx -= UU.x;
     dy -= UU.y;
+    if (dx == 0 && dy == 0) return;
 
-    
+
     x = UU.x;
     y = UU.y;
 
     while (dam > 0) {
         x += dx;
         y += dy;
-        
-        if ((x > MAXX - 1) || (y > MAXY - 1) || (x < 0) || (y < 0)) {
+
+        if (!inbounds(x, y)) {
             dam = 0;
             break;  /* out of bounds */
         }
-        
+
         /* if energy hits player */
         if ((x == UU.x) && (y == UU.y)) {
             say("You are hit by your own magic!\n");
@@ -520,7 +550,7 @@ godirect(enum SPELL spnum, int dam, char *str, int delay, char cshow) {
             flash_at(x, y, cshow, delay);
         }/* if */
 
-        struct Monster mon = Map[x][y].mon;
+        struct Monster mon = at(x, y)->mon;
         if (mon.id != 0) {
             /* If there's a monster here... */
             flash_at(x, y, monchar(mon.id), delay);
@@ -537,33 +567,33 @@ godirect(enum SPELL spnum, int dam, char *str, int delay, char cshow) {
                 }
                 say(str, monname_at(x, y));
                 say("\n");
-                dam -= hitm(x, y, dam);
+                dam -= hitm(x, y, dam, false);
 
                 nap(1000);
                 x -= dx;
                 y -= dy;
             }// if .. else
-            
+
         } else {
 
             /* If there's an object here, we may interact with it... */
-            
-            //it = &Map[x][y].obj.type;
-            struct Object *it = &Map[x][y].obj;
+
+            //it = &at(x, y)->obj.type;
+            struct Object *it = &at(x, y)->obj;
             switch (it->type) {
             case OWALL:
                 say(str, "wall");
-                
+
                 if (dam >= 50 + UU.challenge &&     /*enough damage?*/
                     getlevel() < VBOTTOM-2 && /* can't break wall below V2 */
 
                     // Within bounds?
                     x < MAXX - 1 && y < MAXY - 1 && x > 0 && y > 0)
                 {
-                    say(" The wall crumbles.");
+                    say(" The wall crumbles.\n");
                     *it = NULL_OBJ;
-                }// if 
-                
+                }// if
+
                 say("\n");
                 dam = 0;
                 break;
@@ -595,7 +625,7 @@ godirect(enum SPELL spnum, int dam, char *str, int delay, char cshow) {
             case OTHRONE:
                 say(str, "throne");
                 if (dam > 33) {
-                    Map[x][y].mon = mk_mon(GNOMEKING);
+                    at(x, y)->mon = mk_mon(GNOMEKING);
                     *it = obj(OTHRONE2, 0);
                 }
                 say("\n");
@@ -629,7 +659,7 @@ godirect(enum SPELL spnum, int dam, char *str, int delay, char cshow) {
                 break;
 
                 /* What are you, some kind of flag-fringe tax nut? */
-            case OLRS:        
+            case OLRS:
                 if (dam < 60 + UU.challenge) {
                     say("The LRS absorbs your effort.\n");
                 } else {
@@ -645,10 +675,10 @@ godirect(enum SPELL spnum, int dam, char *str, int delay, char cshow) {
         // The missile lights the way...
         if (UU.blindCount == 0) {
             see_and_update_at(x, y);
-        }// if 
-        
+        }// if
+
         dam -= 3 + (int) (UU.challenge >> 1);
-    }// while 
+    }// while
 }/* godirect*/
 
 
@@ -660,12 +690,13 @@ godirect(enum SPELL spnum, int dam, char *str, int delay, char cshow) {
  */
 static void
 tdirect(){
-    int x, y, m;
+    int8_t x, y;
+    uint8_t m;
 
     if (isconfuse()) return;
 
     if (dirsub(&x, &y) == DIR_CANCEL) return;
-    if ((m = Map[x][y].mon.id) == 0) {
+    if ((m = at(x, y)->mon.id) == 0) {
         say("There wasn't anything there!");
         return;
     }
@@ -674,6 +705,7 @@ tdirect(){
         return;
     }
     teleportmonst(x,y);
+    say("Pop!\n");
 }/* tdirect*/
 
 
@@ -681,30 +713,38 @@ tdirect(){
 /* Create a wall in the requested direction. */
 static void
 makewall() {
-    int x, y;
+    int8_t x, y;
 
     if (isconfuse()) return;
+
     if (dirsub(&x, &y) == DIR_CANCEL) return;
+    ASSERT(inbounds(x, y));
 
-    if ((y >= 0) && (y <= MAXY - 1) && (x >= 0) && (x <= MAXX - 1)) {/* within bounds? */
-        if (Map[x][y].obj.type != OWALL) {  /* can't make anything on
-                                             * walls */
-            if (Map[x][y].obj.type == 0) {  /* is it free of items? */
-                if (Map[x][y].mon.id == 0) { /* is it free of
-                                             * monsters? */
-                    if ((getlevel() != 1) || (x != 33) || (y != MAXY - 1)) {    // <- redundant
-                        Map[x][y].obj = obj(OWALL, 0);
+    // dirsub will clip to the map which can become the player's
+    // location.  We don't allow that, even if it would be funny.
+    if (x == UU.x && y == UU.y) { return; }
 
-                    } else
-                        say("you can't make a wall there!\n");
-                } else
-                    say("there's a monster there!\n");
-            } else
-                say("there's something there already!\n");
-        } else {
-            say("there's a wall there already!\n");
-        }/* if .. else*/
-    }/* if */
+    /* can't make anything on walls */
+    if (at(x, y)->obj.type == OWALL) {
+        say("there's a wall there already!\n");
+        return;
+    }// if
+
+    /* is it free of items? */
+    if (at(x, y)->obj.type != 0) {
+        say("there's something there already!\n");
+        return;
+    }// if
+
+    /* is it free of monsters? */
+    if (at(x, y)->mon.id != 0) {
+        say("there's a monster there!\n");
+        return;
+    }// if
+
+    // Okay, we can proceed
+    at(x, y)->obj = obj(OWALL, 0);
+    say("Rock appears out of thin air.\n");
 }/* makewall*/
 
 
@@ -713,10 +753,10 @@ static void
 vaporizerock() {
     int xh = min(UU.x + 1, MAXX - 2);
     int yh = min(UU.y + 1, MAXY - 2);
-    
+
     for (int x = max(UU.x - 1, 1); x <= xh; x++) {
         for (int y = max(UU.y - 1, 1); y <= yh; y++) {
-            struct MapSquare *pt = &Map[x][y];
+            struct MapSquare *pt = at(x, y);
 
             switch (pt->obj.type) {
             case OWALL:
@@ -749,7 +789,7 @@ vaporizerock() {
 
 
             if (pt->mon.id == XORN || pt->mon.id == TROLL) {
-                hitm(x, y, 200);
+                hitm(x, y, 200, false);
             }// if
         }/* for */
     }/* for */
@@ -760,20 +800,21 @@ vaporizerock() {
 // level while keeping the objects and creatures.
 static void
 alter_reality() {
+    say("Suddenly, everything is different.  Or was it always that way?\n");
     remake_map_keeping_contents();
 
     loseint();
     force_full_update();
     update_display();
-    
-    GS.spellknow[CALTER_REALITY] = false;
+
+    UU.spellknow[CALTER_REALITY] = false;
 
     positionplayer();
-}/* alter_reality*/ 
+}/* alter_reality*/
 
 
 /*
- * Routine to damage all monsters 1 square from player 
+ * Routine to damage all monsters 1 square from player
  *
  * Enter with the spell number in sp, the damage done to wach square
  * in dam, and the format string to identify the spell in str. Returns
@@ -785,10 +826,10 @@ omnidirect(enum SPELL spell, int dam, char *str) {
 
     for (x = UU.x - 1; x < UU.x + 2; x++)
         for (y = UU.y - 1; y < UU.y + 2; y++) {
-            if ((m = Map[x][y].mon.id) != 0) {
+            if ((m = at(x, y)->mon.id) != 0) {
                 if (nospell(spell, m) == 0) {
                     say(str, monname_at(x, y));
-                    hitm(x, y, dam);
+                    hitm(x, y, dam, false);
                     nap(800);
                 } else {
                     lasthit(x, y);
@@ -801,157 +842,168 @@ omnidirect(enum SPELL spell, int dam, char *str) {
 // Prompt the user for a direction, then set *x and *y to the point
 // relative the the player in that direction.
 static DIRECTION
-dirsub(int *x, int *y) {
+dirsub(int8_t *x, int8_t *y) {
     DIRECTION dir;
 
     dir = promptdir(true);
     adjpoint(UU.x, UU.y, dir, x, y);
-    VXY(*x, *y);
-    
+    clip(x, y);
+
     return dir;
 }/* dirsub*/
 
 
 
 /*
- * Routine to ask for a direction and polymorph a monst 
+ * Routine to ask for a direction and polymorph a monst
  *
  * dirpoly()
  *
  * Subroutine to polymorph a monster and ask for the direction its in Enter with
- * the spell number in spmun. Returns no value. 
+ * the spell number in spmun. Returns no value.
  */
 static void
 dirpoly() {
-    int x, y, m;
-
     if (isconfuse()) return;     // if player is confused, can't aim magic
 
+    int8_t x, y;
     if (dirsub(&x, &y) == DIR_CANCEL) return;
 
-    if (Map[x][y].mon.id == 0) {
-        say("There wasn't anything there!");
+    if (at(x, y)->mon.id == 0) {
+        say("There wasn't anything there!\n");
         return;
     }
 
-    if (nospell(CPOLY, Map[x][y].mon.id)) {
+    if (nospell(CPOLY, at(x, y)->mon.id)) {
         lasthit(x, y);
         return;
     }
 
-    // There is a very small chance of this producing a genocided
+    // There is a very small chance of this producing a banished
     // creature, but that just makes things interesting.
+    uint8_t newmon;
     for (int n = 0; n < 100; n++) {
-        m = rnd(DEMONKING-1);
-        if ((MonType[m].flags & FL_GENOCIDED) == 0) { break; }
+        newmon = rnd(DEMONKING-1);
+        if (!is_banished(newmon)) { break; }
     }
-    
-    Map[x][y].mon = mk_mon(m);
+
+    say("The air warps around the %s.\n", monname_at(x, y));
+    at(x, y)->mon = mk_mon(newmon);
 }/* dirpoly */
 
 
-/*
- * Routine to direct spell damage 1 square in 1 dir direct(spnum,dam,str,arg)
- * int spnum,dam,arg; char *str; 
- *
- * Routine to ask for a direction to a spell and then hit the monster Enter with
- * the spell number in spnum, the damage to be done in dam, lprintf format
- * string in str, and lprintf's argument in arg. Returns no value. 
- */
+// Perform one of several (but not all!) directional spell attacks
+// after prompting the player for a direction.
+//
+// Damage is determined by 'spell' and the damage amount by 'dam'.
+// 'str' is the message to print and contains one or two format
+// characters: a '%s' for the monster name followed by a '%d' for the
+// number of hits.
+//
+// If count == 0, it is not displayed and 'str' should NOT have the
+// '%d' format sequence.
 static void
-direct(enum SPELL spell, int dam, char *str, int arg) {
-    int x, y, mon_id;
-
+direct(enum SPELL spell, int dam, char *str, int count) {
     if (isconfuse()) return;
 
+    int8_t x, y;
     if (dirsub(&x, &y) == DIR_CANCEL) return;
 
-    mon_id = Map[x][y].mon.id;
-    if (Map[x][y].obj.type == OMIRROR) {
+    uint8_t mon_id = at(x, y)->mon.id;
+    if (at(x, y)->obj.type == OMIRROR) {
         if (spell == CSLEEP || spell == CWEB) {
-            say(spell == CSLEEP ? "You fall asleep! " 
-                   : "You get stuck in your own web! ");
+            say(spell == CSLEEP         ?
+                "You fall asleep! "     :
+                "You get stuck in your own web! ");
             headsup();
-            arg += 2;
-            while (arg-- > 0) {
+            count += 2;
+            while (count-- > 0) {
                 onemove(DIR_STAY);
                 nap(1000);
             }
             return;
         } else {
-            say(str, "spell caster (that's you)", (long) arg);
+            ASSERT(count == 0);   // Currently, only sleep and web have a count.
+            say(str, "spell caster (that's you)");
+            say("\n");
             headsup();
             losehp(dam, DDMAGICOOPS);
             return;
         }
     }// if
-    
+
     if (mon_id == 0) {
-        say("There wasn't anything there!");
+        say("There wasn't anything there!\n");
         return;
     }// if
-    
+
     if (nospell(spell, mon_id)) {
         lasthit(x, y);
         return;
     }// if
-    
-    say(str, monname_at(x, y), (long) arg);
-    hitm(x, y, dam);
+
+    const char *mname = monname_at(x, y);
+    if (count > 0) {
+        say(str, mname, (long) count);
+    } else {
+        say(str, mname);
+    }// if .. else
+
+    say("\n");
+    hitm(x, y, dam, false);
 }/* direct*/
 
 
 
-/* Display all ungenocided monsters and let the user pick one,
+/* Display all unbanished monsters and let the user pick one,
  * returning the index in MonType[].  -1 means cancel was pressed. */
 static int
-select_genmonst() {
+select_banmonst() {
     struct PickList *pl;
-    int n, id = 0;
+    int id = 0;
     bool selected;
 
     pl = pl_malloc();
-    for (n = 1; n < MAXCREATURE; n++) {
+    for (enum MONSTER_ID n = 1; n < MAXCREATURE; n++) {
         char buffer[200];
 
-        if (MonType[n].flags & FL_GENOCIDED) continue;
+        if (is_banished(n)) { continue; }
 
         snprintf(buffer, sizeof(buffer), "'%c' %s", monchar(n),
                  MonType[n].name);
         pl_add(pl, n, 0, buffer);
     }
 
-    selected = pick_item(pl, "Genocide which monster?", &id);
+    selected = pick_item(pl, "Banish which monster?", &id);
     pl_free(pl);
 
     if (!selected) return -1;
     return id;
-}/* select_genmonst*/
+}/* select_banmonst*/
 
 
 /*
- * Function to ask for monster and genocide from game.  This is done
+ * Function to ask for monster and banish from game.  This is done
  * by setting a flag in the monster[] structure
  */
 void
-genmonst() {
+banmonst() {
     int  i;
 
-    i = select_genmonst();
+    i = select_banmonst();
 
     if (i < 0) {
         say("You relent.\n");
         return;
     }
 
-    MonType[i].flags |= FL_GENOCIDED;  /* genocided from game */
-    GS.spellknow[CGENOCIDE] = false;
+    banish_monster(i);
+    UU.spellknow[CBANISH] = false;
     loseint();
 
-    say("There will be no more %ss.\n", MonType[i].name);
+    say("All %ss are hereby banished from Larn.\n", MonType[i].name);
 
-    setlevel(getlevel());   // Level change removes genocided monsters
-    
+    setlevel(getlevel(), false);   // Level change removes banished monsters
+
     update_display();
-}/* genmonst*/
-
+}/* banmonst*/

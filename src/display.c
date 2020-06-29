@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // Note:
@@ -14,6 +14,7 @@
 
 #include "internal_assert.h"
 #include "game.h"
+#include "ui.h"
 
 #include "display.h"
 
@@ -34,8 +35,8 @@ enum UpdateMode {
 };
 
 struct FovRect {
-    int left, right, top, bottom;
-    int radius;
+    int8_t left, right, top, bottom;
+    int8_t radius;
 };
 
 
@@ -43,16 +44,16 @@ static void
 perform_update (enum UpdateMode mode) {
     bool force = (mode == UM_REDRAW_ALL);
 
-    showstats(&UU, !!GS.wizardMode, force);
+    showstats(!!UU.wizardMode, force);
 
-    show_indicators(&UU, force);
+    show_indicators(force);
 
     if (mode > UM_NOMAP) {
         drawscreen(mode >= UM_FULLMAP);
     }// if
 
-    sync_ui(force);}
-// perform_update
+    sync_ui(force);
+}// perform_update
 
 
 // Update the display if it's dirty
@@ -77,7 +78,8 @@ redraw() {
     FovChanged = MapChanged = false;
 }// redraw
 
-void see_and_update_at(int x, int y) {
+void
+see_and_update_at(int x, int y) {
     see_at(x, y);
 
     if (player_sees(x,y)) {
@@ -121,13 +123,14 @@ mimicmonst() {
 /* Draw (well, schedule for drawing) the map item at position x,y on
  * the map. */
 static void
-drawcell(int x, int y) {
-    struct MapSquare here = Map[x][y];
+drawcell(int x, int y, bool in_town) {
+    struct MapSquare here = *at(x, y);
 
     /* Display the player if they're here. */
     if (x == UU.x && y == UU.y) {
         char player = UU.blindCount > 0 ? ' ' : '@';
-        mapdraw(x, y, player, UU.invisibility ? MF_PLAYER_INV : MF_PLAYER);
+        mapdraw(x, y, player,
+                UU.invisibility ? MFL_PLAYER_INV : MFL_PLAYER, false, in_town);
         return;
     }/* if */
 
@@ -138,13 +141,13 @@ drawcell(int x, int y) {
      * regardless of whether it's in the FoV or a known location.  In
      * addition, this overrides monster abilities. */
     if (UU.monster_detection > 0 && ismon(here.mon)) {
-        mapdraw(x, y, monchar(here.mon.id), in_fov ? MF_FOV : MF_DEFAULT);
+        mapdraw(x, y, monchar(here.mon.id), MFL_DEFAULT, in_fov, in_town);
         return;
     }// if
 
     /* Display empty space if unknown. */
     if (!known(here)) {
-        mapdraw(x, y, Types[ONONE].symbol, MF_NOTSEEN);
+        mapdraw(x, y, Types[ONONE].symbol, MFL_NOTSEEN, false, in_town);
         return;
     }/* if */
 
@@ -158,7 +161,7 @@ drawcell(int x, int y) {
             mon_char = mimicmonst();
         }/* if */
 
-        mapdraw(x, y, mon_char, MF_FOV);
+        mapdraw(x, y, mon_char, MFL_DEFAULT, in_fov, in_town);
         return;
     }// if
 
@@ -171,9 +174,9 @@ drawcell(int x, int y) {
     /* Invert everything except walls, space, or things that look like
      * them. */
     enum MAPFLAGS flag =
-        (here.recalled.type != OWALL && symbol != ' ') ? MF_OBJ :
-        in_fov                                         ? MF_FOV : MF_DEFAULT;
-    mapdraw(x, y, symbol, flag);
+        (here.recalled.type != OWALL && symbol != ' ') ? MFL_OBJ : MFL_DEFAULT;
+
+    mapdraw(x, y, symbol, flag, in_fov, in_town);
 }/* drawcell*/
 
 
@@ -187,6 +190,8 @@ get_vis_rect() {
         radius = UU.enlightenment.radius;
     } else if (UU.awareness) {
         radius = 5;
+   } else if (getlevel() == 0) {
+       radius = 100;
     }/* if */
 
     struct FovRect result;
@@ -213,8 +218,8 @@ expand_vis_rect(struct FovRect fov) {
     fov.bottom += 1;
     fov.radius += 1;
 
-    VXY(fov.left, fov.top);
-    VXY(fov.right, fov.bottom);
+    clip(&fov.left, &fov.top);
+    clip(&fov.right, &fov.bottom);
 
     // And bump by 1 so that we include the outermost row and column
     fov.right += 1;
@@ -232,9 +237,8 @@ static void
 drawscreen(bool all) {
     static struct FovRect ofov = {0,0,0,0,0};   // Previous FovRect
 
-    /* Return unless the map has been initialized. */
-    //if (getlevel() < 0) return;
-    ASSERT(getlevel() >= 0);
+    int lvl = getlevel();
+    ASSERT(lvl >= 0);   // Fails if the map has not been initialized
 
     // Figure out the subsection of the map to draw.
     struct FovRect fov =
@@ -255,7 +259,7 @@ drawscreen(bool all) {
     fov = expand_vis_rect(fov);     // Expand to update the adjacent cells
     for (int y = fov.top; y < fov.bottom; y++) {
         for (int x = fov.left; x < fov.right; x++) {
-            drawcell(x, y);
+            drawcell(x, y, lvl == 0);
         }/* for */
     }/* for */
 }// drawscreen
@@ -274,9 +278,18 @@ static bool
 fov_opaque_test(void *map, int x, int y) {
     if (x < 0 || x >= MAXX || y < 0 || y >= MAXY) { return true; }
     if (UU.enlightenment.time > 0) { return false; }
-    return isopaque(Map[x][y].obj);
+    return isopaque(at(x, y)->obj);
 }// fov_opaque_test
 
+
+static void
+fill_visible_map(bool value) {
+    for (int x = 0; x < MAXX; x++) {
+        for (int y = 0; y < MAXY; y++) {
+            VisibleMap[x][y] = value;
+        }
+    }
+}// fill_visible_map
 
 static void
 update_visible_map(struct FovRect fov_rect) {
@@ -292,8 +305,14 @@ update_visible_map(struct FovRect fov_rect) {
         fovStructInitialized = true;
     }// if
 
+    // The town has full visibility, so this is a trivial case
+    if (getlevel() == 0) {
+        fill_visible_map(true);
+        return;
+    }
+
     // Clear the visible map
-    memset(VisibleMap, 0, sizeof(VisibleMap));
+    fill_visible_map(false);
 
     // fov_circle() sometimes(?) skips the source cells so we set it
     // here since the square you occupy will always be mapped.
@@ -332,7 +351,7 @@ see_and_update_fov() {
             // space.
             if (
                 blindwtw &&
-                (Map[x][y].obj.type == OWALL || Map[x][y].obj.type == ONONE) &&
+                (at(x, y)->obj.type == OWALL || at(x, y)->obj.type == ONONE) &&
                 !known_at(x, y)
                 ) {
                 continue;
@@ -348,20 +367,20 @@ see_and_update_fov() {
 
 bool
 player_sees(int x, int y) {
-//    struct FovRect fov = get_vis_rect();
-//    return fov.left <= x && x <= fov.right && fov.top <= y && y <= fov.bottom;
     return VisibleMap[x][y];
 }// player_sees
 
 
 void
 flash_at(int x, int y, char c, int period) {
+    int level = getlevel();
+
     update_display();
 
-    mapdraw(x, y, c, MF_EFFECT);
+    mapdraw(x, y, c, MFL_EFFECT, false, level == 0);
     sync_ui(false);
 
     nap(period);
-    drawcell(x, y);
+    drawcell(x, y, level == 0);
     sync_ui(false);
 }// flash_at

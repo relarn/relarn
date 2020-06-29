@@ -1,12 +1,16 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
-#include "store.h"
+#include <stdlib.h>
+#include <string.h>
 
 #include "internal_assert.h"
+#include "picklist.h"
+#include "textbuffer.h"
+#include "ui.h"
+#include "player.h"
 
-
-
+#include "store.h"
 
 //
 // Inventory Management
@@ -206,7 +210,7 @@ store_loop(const char *heading_fmt,     // Picker heading; needs a '%d' (gold)
     } else {
         struct Object o = ShopInvent[id].item;
         int price = ShopInvent[id].price*10L;
-        Types[o.type].isKnown = true;
+        identify(o.type);
 
         UU.gold -= price;
         ShopInvent[id].qty--;

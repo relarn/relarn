@@ -1,106 +1,47 @@
 
 # ReLarn
 
-ReLarn is a fork of the the classic Roguelike game Ularn that improves
-the user interface and refactors the source code to be more
-maintainable and better suited to the modern world.  The code has been
-modularized with OS- and UI-dependencies abstracted away, all warnings
-have been fixed, arrays replaced with structures and more.
+ReLarn is an old-school Roguelike game based on ULarn.  The source
+code was forked from Ularm 1.5-ish and extensively refactored to be
+more maintainable and better suited to the modern world.
 
-The goal is to preserve the spirit of the original game on modern
-computers.
+The code has been modularized with OS- and UI-dependencies abstracted
+away, all warnings have been fixed, arrays replaced with structures
+and more.  In addition, there have been a number of quality-of-life
+improvements to the game and its interface as well as a few lore and
+gameplay tweaks.
+
+The goal of this project is to preserve the spirit of the original
+game on modern computers.
 
 See [Changes.md](Changes.md) for a more complete summary of changes.
 
 * [Website](http://relarn.org)
-* [Github](http://github.com/relarn/relarn)
+* [Gitlab](https://gitlab.com/relarn/relarn)
 
 
 ## Getting Started
 
-ReLarn should be easy to build on any sufficiently Unix-like system.
-If it doesn't work out of the box, the build scripts are just small,
-hand-written Makefiles and shell scripts so they're easy to fix.
+Pre-built binaries for the major platforms (and Windows) should now be
+available from [the website](http://relarn.org) so the easiest route
+is probably to just snag one of those and unzip it somewhere.
 
-It has been successfully built on Ubuntu Linux, Raspbian on a
-Raspberry Pi 3, macOS with MacPorts, and Cygwin on Windows 7.
+You should probably also at least skim [the manual](doc/relarn.pod).
 
-
-### Prerequisites
-
-To build ReLarn, you will need:
-
-* gcc, clang or some other C compiler that supports C99 and the common
-  Unix compiler arguments.
-* ncurses version 6 or better.  (Earlier versions may also work.)
-* GNU Make
-* `bash`
-* Perl 5 (optional; `pod2html` is used to generate the man page)
-* The common Unix utilities.
-
-These should all be installed by default or easily available to your
-package manager.  For example, on Ubuntu, the following command is
-all you need:
-
-    sudo apt-get install libncurses-dev gcc make perl
-
-Note that the Makefile uses a bunch of Unixy compiler options so
-(e.g.) Visual C won't work out of the box.  It may be possible to
-hack up the make scripts until it works, but that's not going to be
-easy.
+If you want to build it yourself, directions are [here](doc/BUILD.md).
 
 
-### Configuration
+## Installing
 
-For a program the size of ReLarn, automatic configuration systems
-(e.g. CMake or autoconf) tend to be more trouble than they're worth;
-instead, you configure ReLarn by editing the file `src/config.mk`.
+ReLarn typically follows the standard Unix file layout (`bin/`,
+`lib/`, `share/`, etc.) so you could just `make install` or untar into
+(e.g.) `/usr/local/` on your *nix system.  I generally don't recommend
+this because saved games are not compatible across significant version
+changes so keeping the old version around gives you a shot at
+finishing it.
 
-Simply set `INST_ROOT` to the place you wish the game installed.
-
-    INST_ROOT = /usr/local/games/
-
-The default location is `~/apps/relarn`; if that's sufficient for you,
-you don't need to do anything else.
-
-
-### Building and Installing
-
-Once configuration is done, simply do the standard `make` and `make
-install` in `src/`:
-
-    cd src
-    make RELEASE=yes
-    make RELEASE=yes install
-
-And there you go.
-
-
-### Building a Binary Release
-
-You can also build a tar archive containing the playable game.  This
-doesn't need `INST_ROOT` to be set at all.  Simply run make:
-
-    cd src
-    make RELEASE=yes
-    make RELEASE=yes distbin
-
-This will place the archive in the project root directory.
-
-
-### When It Doesn't Work
-
-If `make` fails with an error message like 
-
-    config.mk:43: *** No settings for FooOS-bar_arch.  Stop.
-
-you will need to add your platform to the list of supported OS-CPU
-pairs in `config.mk`.  It's probably sufficient to copy one of the
-Linux sections.
-
-If it's no that, you'll need to debug it yourself.  Sorry.  Feel free
-to contact me if you can't get it working or to submit a patch or pull
-request if you do.
+My preferred scheme is to put in /usr/local/apps/relarn-<version>/ and
+then symlink the `relarn` file to somewhere in my path.
 
 
 ## Contributing
@@ -123,7 +64,7 @@ decades so it's impossible to track down everyone.
 
 ## License
 
-This project is licensed under the GNU General Public License.  See
-[Copyright.txt](Copyright.txt) and [LICENSE.txt](LICENSE.txt) for
-details.
+This project is licensed under the GNU General Public License
+version 2.  See [Copyright.txt](Copyright.txt) and
+[LICENSE.txt](LICENSE.txt) for details.
 

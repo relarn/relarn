@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -16,6 +16,8 @@
 
 #ifndef HDR_GUARD_PICKLIST_H
 #define HDR_GUARD_PICKLIST_H
+
+#include <stddef.h>
 
 #define MAX_ELEM 256
 #define DESC_MAX 100        /* Max. length of a description. Should be

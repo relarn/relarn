@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 /* This game is bad for you. It is evil. It will rot your brain. */
@@ -19,61 +19,88 @@
 #include "version_info.h"
 
 
-static char cmdhelp[] =
-    "Cmd line format: relarn [-sicnh] [-o <optsfile>] [-d #] [-r]\n"
-    "  -s               show the winners scoreboard\n"
-    "  -i               show the entire scoreboard\n"
-    "  -n               suppress welcome message on starting game\n"
-    "  -h               print this help text\n"
-    "  -v               print the version number and quit\n"
-    "  -o <optsfile>    specify additional options file to be used\n"
-    "  -d <number>      specify level of difficulty (example: relarn -d 5)\n"
-    "  -b               enable UI debugging; may change in the future.\n"
-    ;
+static bool only_show_scores = false;
+static bool only_show_winners = false;
 
+
+static void
+print_help_and_exit() {
+    char* cmdhelp[] = {
+        "Cmd line format: relarn [-sihvb] [-o <optsfile>]",
+        "  -s               show the winners scoreboard",
+        "  -i               show the entire scoreboard",
+        "  -h               print this help text",
+        "  -v               print the version number and quit",
+        "  -o <optsfile>    specify additional options file to be used",
+        "  -b               enable UI debugging; may change in the future.",
+        "  -f <fontpath>    path to the font to use (SDL only).",
+        "  -p <size>        size of the font to use (SDL only).",
+        "  -w <filename>    write scores to a file ('-' for stdout)",
+        NULL
+    };
+
+    printf("%s\n", COPYRIGHT);
+    printf("Version %s\n\n", version_str());
+
+    for (int n = 0; cmdhelp[n]; n++) {
+        printf("%s\n", cmdhelp[n]);
+    }
+
+    exit(0);
+}// help
 
 
 static void
 parse_args(int argc, char *argv[]) {
-    const char *optstring = "bsinvhro:d:";
-    int i;
+    const char *optstring = "bsivhro:f:p:w:";
 
-    while ((i = getopt(argc, argv, optstring)) != -1) {
+    while (true) {
+        int i = getopt(argc, argv, optstring);
+        if (i == -1) { break; }
+
         switch(i) {
         case 'b':
             GameSettings.drawDebugging = true;
             break;
 
         case 's':
-            showscores(false);
-            exit(0);  /* show scoreboard   */
+            only_show_scores = true;
+            break;
+
         case 'i':
-            showscores(true);
-            exit(0);  /* show all scoreboard */
-        case 'n':
-            GameSettings.nointro = true;
+            only_show_scores = true;
+            only_show_winners = true;
+            break;
+
+        case 'w':
+            if (!write_scores(optarg)) {
+                notify("Error writing scores to '%s'\n", optarg);
+                exit(1);
+            }// if
+            exit(0);
             break;
 
         case 'o':
             readopts(optarg);
             break;
 
-        case 'd':   /* specify hardness */
-            GameSettings.difficulty = atoi(optarg);
-            if (GameSettings.difficulty > 100)
-                GameSettings.difficulty = 100;
-            if (GameSettings.difficulty < 0) {
-                printf("difficulty level must be > 0\n");
-                puts(cmdhelp);
-                exit(1);
-            }
+        case 'f':
+            strncpy(GameSettings.fontPath, optarg,
+                    sizeof(GameSettings.fontPath));
             break;
 
+        case 'p': {
+            int sz = atoi(optarg);
+            if (sz <= 0) {
+                printf("Invalid font size: '%s'\n", optarg);
+                exit(1);
+            }// if
+            GameSettings.fontSize = sz;
+            break;
+        }
+
         case 'h':   /* print out command line arguments */
-            printf("%s\n", COPYRIGHT);
-            printf("Version %s\n", version_str());
-            printf("\n%s", cmdhelp);
-            exit(0);
+            print_help_and_exit();
             break;
 
         case 'v':
@@ -90,12 +117,34 @@ parse_args(int argc, char *argv[]) {
 }/* parse_args*/
 
 
+static void
+display_scores_and_quit() {
+
+    init_ui();
+
+    showscores(!only_show_winners);
+
+    teardown_ui();
+
+    exit(0);
+}// display_scores_and_quit
+
+
 
 int
 main (int argc, char *argv[]) {
+    // We catch '-h' here so there's an easy way to run and exit.
+    // This lets us confirm that the current executable can find all
+    // of its external dependencies (shared libs/DLLs).  We bypass
+    // parse_args() to skip a bunch of sanity checks that would fail
+    // if this isn't part of a proper installation.
+    if (argc > 1 && streq("-h", argv[1])) {
+        print_help_and_exit();
+        return 0;   // not reached
+    }// if
 
     /* Initialize OS interface. */
-    init_os(argc, argv);
+    init_os(argv[0]);
 
     /* Make sure the scoreboard exists. */
     ensureboard();
@@ -117,6 +166,11 @@ main (int argc, char *argv[]) {
     readopts(cfgfile_path());
     parse_args(argc, argv);
 
+    // Handle the '-s' or '-i' options.
+    if (only_show_scores) {
+        display_scores_and_quit();
+    }// if
+
     /* restore game if present */
     enum SAVE_STATUS rs = restore_game();
     bool restorflag = ss_success(rs);
@@ -132,16 +186,17 @@ main (int argc, char *argv[]) {
 
     /* create new game */
     if (!restorflag) {
-        makeplayer();   /*  make the character that will play*/
-        setlevel(0);/*  make the dungeon */
-
-        /* tell signals that we are in the welcome screen */
-        if (!GameSettings.nointro)
-            welcome();   /* welcome the player to the game */
-    }
+        makeplayer();       /*  make the character that will play*/
+        setlevel(0, true);  /*  make the dungeon */
+    } else {
+        // We need to do this after init_ui() because it can encounter
+        // fixable fatal errors (e.g. missing font file) and exit.  We
+        // don't want the player to lose their save file this way.
+        rotate_save();
+    }// if
 
     /* Display a welcome message.  Also displays the character class and sex. */
-    say ("Welcome %sto relarn, %s the %s %s\n", restorflag ? "back " : "",
+    say ("Welcome %sto ReLarn, %s the %s %s\n", restorflag ? "back " : "",
          UU.name, female(UU.gender), ccname(UU.cclass));
 
     // Inform the user that the main save file failed and this is a backup.
@@ -151,7 +206,11 @@ main (int argc, char *argv[]) {
 
     force_full_update();
     update_display();   /*  show the initial dungeon */
-    
+
+    // Save during unexpected exits.  (Call cancel_emergency_save() to
+    // disable this before a normal exit.)
+    atexit(emergency_save);
+
     mainloop();
 
     return 0;

@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -8,6 +8,7 @@
 #include "show.h"
 #include "game.h"
 #include "look.h"
+#include "ui.h"
 
 #include "action.h"
 
@@ -302,7 +303,7 @@ teleport(bool risky, int level) {
     }
 
     /*show ?? on bottomline if been teleported  */
-    if (!GS.wizardMode) { UU.teleflag=1; }
+    //if (!UU.wizardMode) { UU.teleflag = true; }
 
     if (level >= 0) {
         new_level = level;
@@ -325,7 +326,7 @@ teleport(bool risky, int level) {
     UU.y = rnd(MAXY-2);
     
     if (getlevel() != new_level) {
-        setlevel(new_level);
+        setlevel(new_level, false);
     }// if 
         
     positionplayer();

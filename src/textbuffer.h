@@ -1,10 +1,10 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
 // Data struct to hold a collection of lines of text for viewing by
 // the UI and related code to manipulate it.  Actual display is in
-// showpages() in ui.[ch]. 
+// showpages() in ui.[ch].
 //
 // Text between pipes ('|') are displayed standout and text between
 // underscores ('_') are displayed underlined.  '/' pauses for 1
@@ -37,8 +37,9 @@ struct TextBuffer *tb_malloc(int length, int linewidth);
 void tb_free(struct TextBuffer *tb);
 void tb_appendline(struct TextBuffer *tb, const char *line);
 void tb_append(struct TextBuffer *tb, const char *line);
-const char *tb_getlastn(struct TextBuffer *tb, int index, int windowSize);
+const char *tb_getlastn(struct TextBuffer *tb, int index, int scrollback, int windowSize);
 void tb_center_all(struct TextBuffer *tb);
+void tb_backspace_last_line(struct TextBuffer *tb);
 
 
 static inline int tb_num_lines(struct TextBuffer *tb) { return tb->num_lines; }

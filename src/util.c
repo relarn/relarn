@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "util.h"
@@ -121,11 +121,12 @@ splitstring(const char* orig, int* nitems) {
 // Non-direction values of dir (DIR_CANCEL and DIR_STAY) result in no
 // movement (i.e. (*outx, *outy) == (x, y)).
 void
-adjpoint(int x, int y, DIRECTION dir, int *outx, int *outy) {
+adjpoint(int8_t x, int8_t y, DIRECTION dir, int8_t *outx, int8_t *outy) {
     static const int offx[] = { 0, 0,  0, 1, 0, -1,  1, -1, 1, -1 };
     static const int offy[] = { 0, 0, -1, 0, 1,  0, -1, -1, 1,  1 };
 
-    ASSERT(dir < sizeof(offx)/sizeof(offx[0]) && dir < sizeof(offy)/sizeof(offy[0]));
+    ASSERT(dir < sizeof(offx)/sizeof(offx[0]) &&
+           dir < sizeof(offy)/sizeof(offy[0]));
     
     *outx = x + offx[dir];
     *outy = y + offy[dir];

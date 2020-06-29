@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // Holds the state and support code for common shop-like behaviour as
@@ -16,7 +16,7 @@ struct StoreItem {
     uint8_t    qty;
 };
 
-extern struct StoreItem ShopInvent[];
+extern struct StoreItem ShopInvent[OBJ_COUNT];
 extern unsigned ShopInventSz;
 
 void sell_multi(int filter, enum PRICEMODE pricemode, const char *intro,

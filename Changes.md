@@ -3,6 +3,113 @@
 Note that spoilery changes are listed in a following section if you
 wish to avoid them.
 
+## Changes in 2.2.0
+
+Now supports native Microsoft Windows as a platform.  All Hail the
+MinGW and MSYS teams.
+
+Now builds as a native windowed application in addition to running on
+a TTY (i.e. console).  All Hail the PDCurses and SDL teams. TTY mode is
+still supported on non-Windows platforms.
+
+Now lets you select colours for various elements in the relarnrc file.
+In addition, there is now a nice set of default colours.  There is
+also now a "dark-screen" option to improve colouring on light-on-dark
+displays.
+
+The town is now completely visible (it's daylight, after all) and
+looks a bit more pleasant.
+
+You can now scroll back on the message pane to see older messages.
+
+Backspace now works as expected when entering numbers or other text.
+
+When a displayed statistic changes (e.g. STR, Max HP), the stat is
+temporarily displayed in bold or reverse-video to make it more
+noticable.
+
+The challenge level system is now deprecated.  The `-c` option is now
+gone and challenge level is no longer displayed in the final message.
+(It's still available in relarnrc and still affects your score.)
+
+Added config option 'gui-email-client:'; like 'email-client:' but only
+used by the SDL-based build.  This lets you specify a different email
+client (or the same one but in an xterm) when there isn't a TTY
+present.
+
+Option 'no-introduction' is ignored if the user interactively created
+a character.  In addition, the `-n` option has been removed.
+
+Cleaned up the way the basic stats are managed.  This is a code
+quality fix but may <strikeout>reduce cheating</strikeout>introduce
+subtle changes in stat modification in some corner cases.
+
+Successfully casting a spell will now always result in a descriptive
+message.
+
+The savefile ID is now less fragile.  Rebuilding on a system with an
+updated kernel should no longer break savefile compatibility.
+
+Renamed spell "Invulnerabilty" to "Invulnerable Globe".  This seems
+implied by some variable names and makes for better lore.
+
+Rewrote the Sphere of Annihilation code to make it simpler and to
+simplify saving.
+
+Fixed a bug where the Explorer's Guild Membership Certificate would
+declare that the player had defeated **REDACTED** even when they
+hadn't.
+
+Generating the Diagnostic file (a debugging aid) no longer creates new
+levels.
+
+The ziller has now been renamed to its more common name, 'zill'.  (A
+zill is a large carnivorous mustelid; its smaller cousin is known as
+the 'wee zill'.)
+
+The Genocide spell is now Banishment.  Mechanically, it's exactly the
+same but magical banishment fits the lore better and is less
+abhorrent.
+
+Corrected the spelling of "jaculus".  (Was using the Latin plural
+"jaculi".)
+
+Fixed the formatting on some messages.
+
+End-of-game email messags now put the current date in the `mbox`
+separator; this was leading to incorrect dates on some email clients.
+
+### Spoilery Changes
+
+Permanence no longer applies to "Hold Monster".
+
+Bug fix: the damage modifier from your current weapon is no longer
+added to magical ranged attacks (e.g. magic missile).
+
+Lemmings are now much less annoying after a few experience levels,
+just enough to get the full Lemming Experience but not enough for it
+to get old.
+
+Destroying certain objects with Spheres of Annihilation will now have
+more consequences: destroying Home loses the game immediately, the LRS
+office adds $2000 to your outstanding tax bill and the University
+revokes your degree (i.e. mark a course as not taken) and (attempts
+to) delete your diploma if you've graduated.
+
+The Diploma now makes you a little more money.  It will now not work
+if you don't have all of your courses.  (This can happen if you drop
+the diploma, destroy the University with a Sphere of Annihilation and
+then pick it up again.)
+
+Now smarter about keeping track of which level numbers the player
+knows after a random level teleport, trap door or other events that
+can send them to an unidentified level of unknown depth.  If the
+player can deduce the depth of previously unknown levels, the game
+will now reveal them.
+
+Changed the way Create Monster finds a free spot to place the monster
+so that it's a bit more random.
+
 ## Changes in 2.1
 
 Broke savefile compatibility with 2.0.
@@ -62,8 +169,8 @@ through them.
 
 Praying at an altar can now (very, very rarely) teleport you back to
 the town with the Potion of Cure Dianthroritis, effectively winning
-the game.  (True fact: this could actually happen in 2.00 as the
-result of a bug.)
+the game.  (True fact: this (instantly winning while praying) could
+also happen in 2.00 as the result of a bug.)
 
 Haste-self now decreases the passage of time by half.  (It used to
 stop the counter completely; this meant that permanent haste-self
@@ -77,11 +184,11 @@ on it.  This is because the action menu gets suppressed if you haven't
 moved and bringing it up requires an explicit look (via ','), which
 consumes a turn.
 
-Made lemmings much easier to kill (and therefore less annoying) by
-increasing their AC.  (Recall that lower AC is better.)
+Made lemmings somewhat easier to kill. (I mean, it's a good feature
+but it gets old fast.)
 
 The spell "Time Stop" was not stopping the turn counter from
-advancing.
+advancing.  It does now.
 
 It is no longer possible to walk through a closed door when "Time
 Stop" is in effect.

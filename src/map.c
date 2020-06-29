@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -12,26 +12,13 @@
 #include "look.h"
 #include "os.h"
 #include "version_info.h"
+#include "ui.h"
+#include "savegame.h"
 
 #include "map.h"
 
 #include <errno.h>
 
-// PLATFORM_ID is an ID specific to the OS+CPU so we can detect
-// incompatible save files.  It needs to get set on the command line.
-// Currently uses the result of `uname -psr` but can be anything
-// provided that it's specific to that architecture and OS.
-#ifndef PLATFORM_ID
-#   error "PLATFORM_ID is undefined."
-#endif
-
-#define RELARN_SAVE_ID "ReLarn " VERSION " " PLATFORM_ID "\n"
-
-static void bwrite(FILE *fh, unsigned int *sum, char *buf, size_t bufSize,
-                   bool *errorOccurred);
-static void bread(FILE *fh, unsigned int *sum, char *buf, size_t bufSize,
-                  bool *errorOccurred);
-static void setlevptrs (void);
 
 static void newcavelevel (void);
 static void makemaze(int lev);
@@ -44,22 +31,82 @@ static void fillmroom(int n, int what, int arg);
 static void froom(int n, int itm, int arg);
 static void fillroom(struct Object obj);
 static void sethp(bool firstVisit);
-static void checkgen(void);
+static void checkban(void);
 static void eat(int xx, int yy);
-static unsigned int sum(unsigned char *data, int n);
 
-/* The current level: */
-static int LevelNum = -1;
+// State of the game:
+struct World W = {-1};
 
-/* All maps: */
-struct MapSquare *Map[MAXX];
-static struct Level Levels[NLEVELS];
 
 /* Return the current level. -1 means the map hasn't been created yet. */
 int
 getlevel() {
-    return LevelNum;
+    return W.levelNum;
 }/* getlevel*/
+
+struct MapSquare*
+at(uint8_t x, uint8_t y) {
+    ASSERT(inbounds(x,y));
+    return &W.levels[W.levelNum].map[x][y];
+}
+
+struct Level *
+lev() {
+    ASSERT(W.levelNum >= 0 && W.levelNum < NLEVELS);
+    return &W.levels[W.levelNum];
+}
+
+
+//
+// Simple map queries
+//
+
+void
+see_at(int x, int y) {
+    at(x, y)->recalled = at(x, y)->obj;
+}// see_at
+
+
+void
+forget_at(int x, int y) {
+    at(x, y)->recalled = UNSEEN_OBJ;
+}// forget_at
+
+
+bool
+known(struct MapSquare here) {
+    return here.recalled.type != UNSEEN_OBJ.type;
+}// known
+
+
+bool
+known_at(int x, int y) {
+    ASSERT(x < MAXX && y < MAXY && 0 <= x && 0 <= y);
+    return known(*at(x,y));
+}// known_at
+
+
+void
+get_level_copy_at(int index, struct Level *lev) {
+    ASSERT(index >= 0 && index < NLEVELS);
+    memcpy(lev, &W.levels[index], sizeof(W.levels[0]));
+}// get_level_copy_at
+
+
+// Replace the contents of W with those of a different World struct.
+// This is used when loading saved games and nowhere else.
+void
+restore_global_world_from(const struct World *aWholeNewWorld) {
+    W = *aWholeNewWorld;
+}// restore_global_world_from
+
+// Copy W to *worldCopy.  This should only ever be used as part of
+// saving the game.
+void
+stash_global_world_at(struct World *worldCopy) {
+    *worldCopy = W;
+}// stash_global_world_at
+
 
 const char *
 getlevelname() {
@@ -68,71 +115,113 @@ getlevelname() {
         " 6"," 7"," 8"," 9","10","11","12","13","14","15",
         "V1","V2","V3","V4","V5"
     };
-    return levelname[LevelNum];
+    return levelname[W.levelNum];
 }// getlevelname
 
 /* destroy object at present location */
 void
 udelobj() {
-    Map[UU.x][UU.y].obj = NULL_OBJ;
+    at(UU.x, UU.y)->obj = NULL_OBJ;
     see_and_update_fov();
 }/* udelobj*/
 
 
-void
-setlevel(int newlevel) {
-    LevelNum = newlevel;
+/*
 
-    /* Reset teleflag if this is level 0 since now, we know where we
-     * are. */
+New rule:
+
+You know a level if:
+
+1. You moved there from an adjacent known level.
+2. You moved from there TO an adjacent known level.
+3. An adjectent level becomes known via this function.
+
+This is called only when the player should be able to deduce the
+current level from the previous level.
+
+*/
+
+static void
+deduce_level_knowledge(int newlevel, int oldlevel) {
+    // The player knows they're in town.  This sets the town's 'known'
+    // at the start of the game; other times are just a bonus.
     if (newlevel == 0) {
-        UU.teleflag = false;
-    }/* if */
+        W.levels[0].known = true;
+        // Carry on, in case we've reached the town from an unknown
+        // level.
+    }// if
 
-    /* Set the global level and map pointers. */
-    setlevptrs();
+    // Case 1: moving from known level to (possibly new) unknown level.
+    if (W.levels[oldlevel].known) {
+        W.levels[newlevel].known = true;
+        return;
+    }// if
+
+    // Case 2: moving from unknown to known.
+    //
+    // In this case, we mark as known all adjacent unknown levels
+    // going backward.  This is on the theory that since the player
+    // knows how these unknown maps relate to each other, they can now
+    // deduce them all.  (There are cases where this isn't true due to
+    // teleporation, but we can't detect that now.  And anyway, a
+    // dungeon explorer will have recognized the level due to, uh,
+    // moisture level or air pressure or lichen or something.)
+    if (W.levels[newlevel].known && !W.levels[oldlevel].known) {
+        int dir = newlevel < oldlevel ? 1 : -1;
+
+        // Are we in the caves or the volcano?
+        int top     = newlevel >= VTOP ? VTOP : 0;
+        int bottom  = newlevel >= VTOP ? VBOTTOM : DBOTTOM;
+
+        // Mark until we reach known or unvisited (or the end).
+        for (int lvl = oldlevel; lvl >= top && lvl <= bottom; lvl += dir) {
+            if (!W.levels[lvl].exists || W.levels[lvl].known) { break; }
+            W.levels[lvl].known = true;
+        }// for
+    }// if
+}// deduce_level_knowledge
+
+
+void
+setlevel(int newlevel, bool identify) {
+
+    // Set the 'known' flags if appropriate
+    if (identify) {
+        deduce_level_knowledge(newlevel, W.levelNum);
+    }
+
+    W.levelNum = newlevel;
 
     /* We'll probably need to redraw the display. */
     force_full_update();
 
     /* restore the new level if it exists. */
-    if (Lev->exists) {
+    if (lev()->exists) {
         sethp(false);
-        checkgen();
+        checkban();
         return;
     }/* if */
 
     /* Otherwise, force the creation of the current level. */
     newcavelevel();
+
 }/* setlevel*/
-
-
-/* Set the global pointers to the current map and level structures. */
-static void
-setlevptrs () {
-    int n;
-
-    Lev = &Levels[LevelNum];
-
-    /* Make map point to the map in Lev. */
-    for (n = 0; n < MAXX; n++) {
-        Map[n] = &(Lev->map[n][0]);
-    }/* for */
-}/* setlevptrs */
 
 
 /* Add 'thing' to the list of stolen items in the Level referenced by
  * 'lev'.  If the stolen object list is full, pick an item at random
  * and replace it with 'thing'. */
 void
-add_to_stolen(struct Object thing, struct Level *lev) {
-    if (lev->numStolen < MAX_STOLEN) {
-        lev->stolen[lev->numStolen] = thing;
-        lev->numStolen++;
+add_to_stolen(struct Object thing) {
+    struct Level *lv = lev();
+
+    if (lv->numStolen < MAX_STOLEN) {
+        lv->stolen[lv->numStolen] = thing;
+        lv->numStolen++;
         return;
     }/* if */
 
-    lev->stolen[rund(MAX_STOLEN)] = thing;
+    lv->stolen[rund(MAX_STOLEN)] = thing;
 }/* add_to_stolen*/
 
 
@@ -163,220 +252,12 @@ remove_stolen(struct Level *lev) {
 
 
 
-
-
-
-// Save the game to 'fh'.  Return true on success, false if an error
-// occurred.
-bool
-savegame_to_file(FILE *fh) {
-    int i;
-    char genocided; /* To keep save files compatible with old struct MonstTypeData */
-    struct sphere *sp;
-    unsigned int filesum = 0;
-    char *save_id = RELARN_SAVE_ID;
-    bool known[OBJ_COUNT];
-
-    bool errorOccurred = false;
-
-    bwrite(fh, &filesum, save_id, strlen(save_id) + 1, &errorOccurred);
-
-    // To do: only write out levels which exist.  (Then again, the
-    // empty levels compress to almost nothing.)
-    bwrite(fh, &filesum, (char *)Levels, sizeof(Levels), &errorOccurred);
-
-    bwrite(fh, &filesum, (char *)&UU, sizeof(UU), &errorOccurred);
-    bwrite(fh, &filesum, (char *)&GS, sizeof(GS), &errorOccurred);
-    bwrite(fh, &filesum, (char *)&LevelNum, sizeof(LevelNum), &errorOccurred);
-    bwrite(fh, &filesum, (char *)Invent, sizeof(struct Object) * IVENSIZE,
-           &errorOccurred);
-
-    for (i = 0; i < OBJ_COUNT; i++) {
-        known[i] = Types[i].isKnown;
-    }
-    bwrite(fh, &filesum, (char *)known, sizeof(known), &errorOccurred);
-    bwrite(fh, &filesum, (char *)&ShopInventSz, sizeof(ShopInventSz), &errorOccurred);
-    bwrite(fh, &filesum, (char *)ShopInvent, sizeof(struct StoreItem) * ShopInventSz,
-           &errorOccurred);
-
-    /* Write genocide status */
-    for (i = 0; i < MAXCREATURE; i++)  {
-        genocided = ((MonType[i].flags & FL_GENOCIDED) != 0);
-        bwrite(fh, &filesum, &genocided, sizeof(genocided), &errorOccurred);
-    }
-
-    /* save spheres of annihilation */
-    sp=spheres;
-    for (i = 0; i < UU.sphcast; i++) {
-        bwrite(fh, &filesum, (char * )sp, sizeof(struct sphere), &errorOccurred);
-        sp = sp->p;
-    }
-
-    /* file sum */
-    bwrite(fh, &filesum, (char *)&filesum, sizeof(filesum), &errorOccurred);
-
-    return !errorOccurred;
-}/* savegame_to_file*/
-
-
-// Load saved game from 'fh'.  Returns true on success, false on error.
-//
-// If the input file was from an incompatible version of relarn and
-// wrongFileVersion is not NULL, it will also set *wrongFileVersion to
-// true (and to false otherwise).
-bool
-restore_from_file(FILE *fh, bool *wrongFileVersion) {
-    int i;
-    char genocided; /* To keep save files compatible with old struct MonstTypeData */
-    unsigned int thesum, asum;
-    struct sphere *sp,*splast;
-    unsigned int filesum = 0;
-    char save_id_maybe[80];
-    size_t sid_len;
-    bool known[OBJ_COUNT];
-    bool fileErr = false;
-
-    if (wrongFileVersion) { *wrongFileVersion = false; }
-
-    sid_len = strlen(RELARN_SAVE_ID);
-    ASSERT (sid_len < sizeof(save_id_maybe));
-
-    bread (fh, &filesum, save_id_maybe, sid_len + 1, &fileErr);
-    save_id_maybe[sid_len] = 0;  /* Ensure null-termination. */
-    if (strcmp(save_id_maybe, RELARN_SAVE_ID) != 0) {
-        if (wrongFileVersion) { *wrongFileVersion = true; }
-        return false;
-    }/* if */
-
-    bread(fh, &filesum, (char *)Levels, sizeof(Levels), &fileErr);
-    bread(fh, &filesum, (char *)&UU, sizeof(UU), &fileErr);
-    bread(fh, &filesum, (char *)&GS, sizeof(GS), &fileErr);
-    bread(fh, &filesum, (char *)&LevelNum, sizeof(LevelNum), &fileErr);
-    bread(fh, &filesum, (char * )Invent, sizeof(struct Object) * IVENSIZE,
-          &fileErr);
-    bread(fh, &filesum, (char *)known, sizeof(known), &fileErr);
-
-    bread(fh, &filesum, (char *)&ShopInventSz, sizeof(ShopInventSz), &fileErr);
-    if(ShopInventSz >= OBJ_COUNT) { return false; }
-
-    bread(fh, &filesum, (char*)ShopInvent, sizeof(struct StoreItem)*ShopInventSz,
-          &fileErr);
-
-    /* Read genocide info into monster flags */
-    for (i = 0; i < MAXCREATURE; i++)  {
-        bread(fh, &filesum,  &genocided, sizeof(genocided), &fileErr);
-        if (genocided) MonType[i].flags |= FL_GENOCIDED;
-    }
-
-    /* get spheres of annihilation */
-    for (i = 0; i < UU.sphcast; i++) {
-        sp = xmalloc(sizeof(struct sphere));
-        bread(fh, &filesum,  (char *)sp, sizeof(struct sphere), &fileErr);
-        if (i==0) {
-            spheres = sp;
-            splast = sp;
-            sp = sp->p;
-        } else {
-            splast->p = sp;
-            splast = sp;
-            sp = sp->p;
-        }
-    }
-
-    // Compute the checksum and return if they don't match
-    thesum = filesum;   /* sum of everything so far */
-    bread(fh, &filesum, (char *)&asum, sizeof(asum), &fileErr);
-
-    if (asum != thesum) {
-        return false;
-    }/* if */
-
-    //
-    // Now, do post-load processing
-    //
-
-    if (UU.hp <= 0) {
-        return false;
-    }
-
-    for (i = 0; i < OBJ_COUNT; i++) {
-        Types[i].isKnown = known[i];
-    }/* for */
-
-    /* Set the global level and map pointers. */
-    setlevptrs();
-
-    /*
-     *  closedoor() in action.c sets dropflag to stop the player being
-     *  asked to re-open a door they just closed.  However, if they
-     *  save the game before moving off that square, dropflag is lost.
-     *  We restore it here.
-     */
-    if (Map[UU.x][UU.y].obj.type == OCLOSEDDOOR) {
-        cancel_look();
-    }/* if */
-
-    return true;
-}/* restore_from_file*/
-
-// Write 'num' bytes of 'buf' to 'fh' unless *errorOccurred is true in
-// which case do nothing.  If an I/O error occurrs, set *errorOccurred
-// to true.  Also update filesum with the file checksum.
-static void
-bwrite(FILE *fh, unsigned int *filesum, char *buf, size_t num,
-       bool *errorOccurred)
-{
-    if (*errorOccurred) { return; }
-
-    int nwrote = fwrite(buf, 1, num, fh);
-    if (nwrote != num) { *errorOccurred = true; }
-
-    *filesum += sum((unsigned char *)buf, num);
-}/* bwrite*/
-
-
-// Like bwrite, but reads.
-//
-// Also: % Baby I'm-a want your savefile. %
-static void
-bread(FILE *fh, unsigned int *filesum, char *buf, size_t bufSize,
-      bool *errorOccurred)
-{
-    if (*errorOccurred) { return; }
-
-    int nread = fread(buf, 1, bufSize, fh);
-    if (nread != bufSize) { *errorOccurred = true; }
-
-    *filesum += sum((unsigned char *)buf, bufSize);
-}/* bread*/
-
-
-/* Compute a checksum for 'data'. */
-static unsigned int
-sum(unsigned char *data, int n) {
-    unsigned int sum;
-    int c, nb;
-
-    sum = nb = 0;
-    while (nb++ < n) {
-        c = *data++;
-        if (sum & 01)
-            sum = (sum >> 1) + 0x8000;
-        else
-            sum >>= 1;
-        sum += c;
-        sum &= 0xFFFF;
-    }
-    return sum;
-}/* sum*/
-
-
 /*                     Map creation                       */
 
 /* Create the current cave level.  Must not already exist. */
 static void
 newcavelevel () {
-    ASSERT(!Lev->exists);
+    ASSERT(!lev()->exists);
 
     /* Create the maze; either fetch it from a data file or generate
      * it. */
@@ -389,7 +270,7 @@ newcavelevel () {
     set_reveal(false);
 
     makeobject(getlevel());
-    Lev->exists = true;   /* first time here */
+    lev()->exists = true;   /* first time here */
     sethp(true);
 
     if (getlevel() == 0) {
@@ -397,7 +278,7 @@ newcavelevel () {
         force_full_update();
     }/* if */
 
-    checkgen(); /* wipe out any genocided monsters */
+    checkban(); /* wipe out any banished monsters */
 }/* newcavelevel */
 
 
@@ -418,7 +299,7 @@ makemaze (int lev) {
         struct Object wallish = lev == 0 ? NULL_OBJ : obj(OWALL, 0);
         for (int i=0; i<MAXY; i++) {
             for (int j=0; j<MAXX; j++) {
-                Map[j][i].obj = wallish;
+                at(j, i)->obj = wallish;
             }/* for */
         }/* for */
     }
@@ -449,8 +330,8 @@ makemaze (int lev) {
             }
             for (int i = mxl; i < mxh; i++) {
                 for (int j = myl; j < myh; j++) {
-                    Map[i][j].obj = NULL_OBJ;
-                    if (z) { Map[i][j].mon = mk_mon(z); }
+                    at(i, j)->obj = NULL_OBJ;
+                    if (z) { at(i, j)->mon = mk_mon(z); }
                 }/* for */
             }/* for */
         }/* for */
@@ -459,7 +340,7 @@ makemaze (int lev) {
     if (lev!=DBOTTOM && lev!=VBOTTOM) {
         my = rnd(MAXY-2);
         for (int i = 1; i < MAXX-1; i++) {
-            Map[i][my].obj = NULL_OBJ;
+            at(i, my)->obj = NULL_OBJ;
         }
     }
 
@@ -487,18 +368,18 @@ remake_map_keeping_contents() {
     /* save all items and monsters and fill the level with walls */
     for (int y = 0; y < MAXY; y++) {
         for (int x = 0; x < MAXX; x++) {
-            struct MapSquare *pt = &Map[x][y];
+            struct MapSquare *pt = at(x,y);
             int item = pt->obj.type;
 
             if (item && item != OWALL && item != OANNIHILATION && item!=OEXIT){
                 save[sc].type = ITEM;
-                save[sc].i.o = Map[x][y].obj;
+                save[sc].i.o = at(x, y)->obj;
                 ++sc;
             }/* if */
 
             if (pt->mon.id) {
                 save[sc].type = MONSTER;
-                save[sc].i.m = Map[x][y].mon;
+                save[sc].i.m = at(x, y)->mon;
                 ++sc;
             }/* if */
 
@@ -513,11 +394,11 @@ remake_map_keeping_contents() {
 
     /* Create the exit if this is level 1. */
     if (getlevel() == 1) {
-        Map[CAVE_EXIT_X][CAVE_EXIT_Y].obj = obj(OEXIT, 0);
+        at(CAVE_EXIT_X, CAVE_EXIT_Y)->obj = obj(OEXIT, 0);
     }
 
     for (int j = rnd(MAXY - 2), i = 1; i < MAXX - 1; i++) {
-        Map[i][j].obj = obj(ONONE, 0);
+        at(i, j)->obj = obj(ONONE, 0);
     }
 
     /* put objects back in level */
@@ -526,23 +407,23 @@ remake_map_keeping_contents() {
         int x = 1, y = 1;
 
         if (save[sc].type == ITEM) {
-            while (--tries > 0 && Map[x][y].obj.type) {
+            while (--tries > 0 && at(x, y)->obj.type) {
                 x = rnd(MAXX - 1);
                 y = rnd(MAXY - 1);
             }/* while */
 
             if (tries) {
-                Map[x][y].obj = save[sc].i.o;
+                at(x, y)->obj = save[sc].i.o;
             }/* if */
         } else {    /* put monsters back in */
-            while (--tries > 0 && (Map[x][y].obj.type == OWALL
-                                      || Map[x][y].mon.id)) {
+            while (--tries > 0 && (at(x, y)->obj.type == OWALL
+                                      || at(x, y)->mon.id)) {
                 x = rnd(MAXX - 1);
                 y = rnd(MAXY - 1);
             }/* while */
 
             if (tries) {
-                Map[x][y].mon = save[sc].i.m;
+                at(x, y)->mon = save[sc].i.m;
             }/* if */
         }/* if .. else*/
     }/* for */
@@ -563,34 +444,34 @@ eat (int xx, int yy) {
         switch(dir) {
         case 1:
             if (xx <= 2) break; /*  west    */
-            if ((Map[xx-1][yy].obj.type!=OWALL) || (Map[xx-2][yy].obj.type!=OWALL))
+            if ((at(xx-1, yy)->obj.type!=OWALL) || (at(xx-2, yy)->obj.type!=OWALL))
                 break;
-            Map[xx-1][yy].obj = NULL_OBJ;
-            Map[xx-2][yy].obj = NULL_OBJ;
+            at(xx-1, yy)->obj = NULL_OBJ;
+            at(xx-2, yy)->obj = NULL_OBJ;
             eat(xx-2,yy);
             break;
         case 2:
             if (xx >= MAXX-3) break;  /*    east    */
-            if ((Map[xx+1][yy].obj.type!=OWALL) || (Map[xx+2][yy].obj.type!=OWALL))
+            if ((at(xx+1, yy)->obj.type!=OWALL) || (at(xx+2, yy)->obj.type!=OWALL))
                 break;
-            Map[xx+1][yy].obj = NULL_OBJ;
-            Map[xx+2][yy].obj = NULL_OBJ;
+            at(xx+1, yy)->obj = NULL_OBJ;
+            at(xx+2, yy)->obj = NULL_OBJ;
             eat(xx+2,yy);
             break;
         case 3:
             if (yy <= 2) break; /*  south   */
-            if ((Map[xx][yy-1].obj.type!=OWALL) || (Map[xx][yy-2].obj.type!=OWALL))
+            if ((at(xx, yy-1)->obj.type!=OWALL) || (at(xx, yy-2)->obj.type!=OWALL))
                 break;
-            Map[xx][yy-1].obj = NULL_OBJ;
-            Map[xx][yy-2].obj = NULL_OBJ;
+            at(xx, yy-1)->obj = NULL_OBJ;
+            at(xx, yy-2)->obj = NULL_OBJ;
             eat(xx,yy-2);
             break;
         case 4:
             if (yy >= MAXY-3 ) break;   /*north */
-            if ((Map[xx][yy+1].obj.type!=OWALL) || (Map[xx][yy+2].obj.type!=OWALL))
+            if ((at(xx, yy+1)->obj.type!=OWALL) || (at(xx, yy+2)->obj.type!=OWALL))
                 break;
-            Map[xx][yy+1].obj = NULL_OBJ;
-            Map[xx][yy+2].obj = NULL_OBJ;
+            at(xx, yy+1)->obj = NULL_OBJ;
+            at(xx, yy+2)->obj = NULL_OBJ;
             eat(xx,yy+2);
             break;
         };
@@ -642,7 +523,7 @@ cannedlevel(int lev) {
         // fatal error.  But for now, a subtle error message is
         // easiest.
         say("%s",
-            GS.wizardMode                   ?
+            UU.wizardMode                   ?
             "Error opening levels file!\n"  :
             "You feel vague existential unease.\n");
         return false;
@@ -658,14 +539,14 @@ cannedlevel(int lev) {
     {
         int idx = rund(20);
         fseek(fp, (long)(idx * ((MAXX * MAXY)+MAXY+1)), 0);
-        if (GS.wizardMode) {
+        if (UU.wizardMode) {
             say("Loading canned level %d.\n", idx);
         }
     }
 
     for (int y = 0; y < MAXY; y++) {
         if ((row = fgets(buf, 128, fp)) == (char *)NULL) {
-            if (GS.wizardMode) {
+            if (UU.wizardMode) {
                 say("IO error when reading map: %s\n", strerror(errno));
             }
             fclose(fp);
@@ -703,8 +584,8 @@ cannedlevel(int lev) {
                 nob = newobject(lev+1);
                 break;
             };
-            Map[x][y].obj = nob;
-            Map[x][y].mon = mk_mon(mit);
+            at(x, y)->obj = nob;
+            at(x, y)->mon = mk_mon(mit);
         }// for
     }// for
 
@@ -746,16 +627,16 @@ troom(int lv, int xsize, int ysize, int tx, int ty, enum DOORTRAP_RISK dtr) {
 
     for (j=ty-1; j<=ty+ysize; j++)
         for (i=tx-1; i<=tx+xsize; i++)  /* clear out space for room */
-            Map[i][j].obj = NULL_OBJ;
+            at(i, j)->obj = NULL_OBJ;
     for (j=ty; j<ty+ysize; j++)
         /* now put in the walls */
         for (i=tx; i<tx+xsize; i++) {
-            Map[i][j].obj = obj(OWALL, 0);
-            Map[i][j].mon = NULL_MON;
+            at(i, j)->obj = obj(OWALL, 0);
+            at(i, j)->mon = NULL_MON;
         }
     for (j=ty+1; j<ty+ysize-1; j++)
         for (i=tx+1; i<tx+xsize-1; i++) /* now clear out interior */
-            Map[i][j].obj = NULL_OBJ;
+            at(i, j)->obj = NULL_OBJ;
 
     /* locate the door on the treasure room */
     switch(rnd(2))  {
@@ -763,13 +644,13 @@ troom(int lv, int xsize, int ysize, int tx, int ty, enum DOORTRAP_RISK dtr) {
         i = tx + rund (xsize);
         j = ty + (ysize-1) * rund(2);
 
-        Map[i][j].obj = door(dtr);  /* on horizontal walls */
+        at(i, j)->obj = door(dtr);  /* on horizontal walls */
         break;
     case 2:
         i = tx + (xsize-1)*rund(2);
         j = ty + rund (ysize);
 
-        Map[i][j].obj = door(dtr); /* on vertical walls */
+        at(i, j)->obj = door(dtr); /* on vertical walls */
         break;
     }
 
@@ -808,7 +689,7 @@ makestairs(int lev) {
 
     /* Make the cave exit if this is level 1 */
     if (lev == 1) {
-        Map[CAVE_EXIT_X][CAVE_EXIT_Y].obj = obj(OEXIT, 0);
+        at(CAVE_EXIT_X, CAVE_EXIT_Y)->obj = obj(OEXIT, 0);
     }/* if */
 
     /* stairs down everywhere except V1 and V2 */
@@ -1016,7 +897,7 @@ fillroom (struct Object obj) {
 
     x=rnd(MAXX-2);
     y=rnd(MAXY-2);
-    while (Map[x][y].obj.type) {
+    while (at(x, y)->obj.type) {
         x += rnd(3)-2;
         y += rnd(3)-2;
         if (x > MAXX-2)
@@ -1028,7 +909,7 @@ fillroom (struct Object obj) {
         if (y < 1)
             y=MAXY-2;
     }
-    Map[x][y].obj = obj;
+    at(x, y)->obj = obj;
 }/* fillroom */
 
 
@@ -1087,20 +968,20 @@ sethp (bool firstVisit) {
 
 
 /*
- *  Function to destroy all genocided monsters on the present level
+ *  Function to remove all banished monsters on the present level
  */
 static void
-checkgen () {
+checkban () {
     int x,y;
 
     for (y=0; y<MAXY; y++) {
         for (x=0; x<MAXX; x++) {
-            if ((MonType[Map[x][y].mon.id].flags & FL_GENOCIDED) != 0) {
-                Map[x][y].mon = NULL_MON;
+            if (is_banished(at(x, y)->mon.id)) {
+                at(x, y)->mon = NULL_MON;
             }/* if */
         }/* for */
     }/* for */
-}/* checkgen */
+}/* checkban */
 
 
 /* Search the current map for the coordinates of an object with type
@@ -1108,11 +989,11 @@ checkgen () {
  * success.  If nothing is found, returns false and does not modify *x
  * or *y. */
 bool
-findobj(uint8_t type, int *x, int *y) {
-    int ix, iy;
+findobj(uint8_t type, int8_t *x, int8_t *y) {
+    int8_t ix, iy;
     for (iy=0; iy < MAXY; iy++) {
         for (ix = 0; ix < MAXX; ix++) {
-            if (Map[ix][iy].obj.type == type) {
+            if (at(ix, iy)->obj.type == type) {
                 *x = ix;
                 *y = iy;
                 return true;
@@ -1133,13 +1014,13 @@ cgood(int x, int y, bool itm, bool monst) {
 
     ASSERT(itm || monst);
 
-    if (x < 0 || x >= MAXX || y < 0 || y > MAXY)    return false;
+    if (!inbounds(x, y))                            return false;
 
-    type = Map[x][y].obj.type;
+    type = at(x, y)->obj.type;
     if (type == OWALL || type == OCLOSEDDOOR)       return false;
 
-    if (itm     && !isnone(Map[x][y].obj))          return false;
-    if (monst   && Map[x][y].mon.id != NOMONST)     return false;
+    if (itm     && !isnone(at(x, y)->obj))          return false;
+    if (monst   && at(x, y)->mon.id != NOMONST)     return false;
 
     return true;
 }/* cgood*/
@@ -1227,7 +1108,7 @@ createitem(int baseX, int baseY, struct Object item) {
     int x = 0, y = 0;
     int radius = point_near(baseX, baseY, &x, &y, true, false);
     if (radius >= 0) {
-        Map[x][y].obj = item;
+        at(x, y)->obj = item;
     } else {
         say("You seen an object begin to form, then disappear.\n");
     }// if
@@ -1293,3 +1174,17 @@ set_reveal(bool see) {
         }/* for */
     }/* for */
 }/* map_level*/
+
+
+// Heal all monsters on the current map level
+void
+heal_monsters() {
+    for(int y = 0; y < MAXY; y++) {
+        for(int x = 0; x< MAXX; x++) {
+            uint8_t monID = at(x, y)->mon.id;
+            if (monID) {
+                at(x, y)->mon.hitp = mon_hp(monID);
+            }/* if */
+        }/* for*/
+    }/* for*/
+}// heal_monsters

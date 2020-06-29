@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -27,14 +27,14 @@ MONSTER(KOBOLD,          'K',  1,   15,   1,       SA_NONE,   7,   10,     1,   
 MONSTER(ORC,             'O',  2,   15,   3,       SA_NONE,   9,   40,     5,       2,                           FL_NONE, "orc")
 MONSTER(SNAKE,           'S',  2,   10,   1,       SA_NONE,   3,    0,     3,       1,                           FL_NONE, "snake")
 MONSTER(CENTIPEDE,       'c',  2,   13,   1,      SA_STING,   3,    0,     2,       2,                           FL_NONE, "giant centipede")
-MONSTER(JACULI,          'j',  2,    9,   1,       SA_NONE,   3,    0,     2,       1,                           FL_NONE, "jaculi")
+MONSTER(JACULI,          'j',  2,    9,   1,       SA_NONE,   3,    0,     2,       1,                           FL_NONE, "jaculus")
 MONSTER(TROGLODYTE,      't',  2,   10,   2,       SA_NONE,   5,   80,     5,       3,                           FL_SLOW, "troglodyte")
 MONSTER(ANT,             'A',  2,    8,   1,      SA_STING,   4,    0,     5,       4,                           FL_NONE, "giant ant")
 MONSTER(EYE,             'E',  3,    8,   2,       SA_NONE,   3,    0,     7,       2,                           FL_NONE, "floating eye")
 MONSTER(LEPRECHAUN,      'L',  3,    3,   0,  SA_STEALGOLD,   3, 1500,    15,      40,                           FL_NONE, "leprechaun")
 MONSTER(NYMPH,           'N',  3,    3,   0,      SA_STEAL,   9,    0,    20,      40,                           FL_NONE, "nymph")
 MONSTER(QUASIT,          'Q',  3,    5,   3,       SA_NONE,   3,    0,    14,      10,                           FL_NONE, "quasit")
-MONSTER(RUSTMONSTER,     'R',  3,    5,   0,       SA_RUST,   3,    0,    18,      20,                           FL_NONE, "rust monster")
+MONSTER(RUSTMONSTER,     'R',  3,    5,   0,       SA_RUST,   3,    0,    18,      20,                          FL_DULLS, "rust monster")
 MONSTER(ZOMBIE,          'Z',  3,   12,   3,       SA_NONE,   3,    0,     9,       7,                           FL_NONE, "zombie")
 MONSTER(ASSASSINBUG,     'a',  4,    4,   3,       SA_NONE,   3,    0,    23,      13,                           FL_NONE, "assassin bug")
 MONSTER(BUGBEAR,         'b',  4,    5,   4,       SA_BITE,   5,   40,    24,      33,                           FL_NONE, "bitbug")
@@ -45,10 +45,13 @@ MONSTER(TROLL,           'T',  5,    9,   5,       SA_NONE,   9,   80,    55,   
 MONSTER(YETI,            'Y',  5,    8,   4,       SA_NONE,   5,   50,    45,      90,                           FL_NONE, "yeti")
 MONSTER(WHITEDRAGON,     'd',  5,    4,   5,       SA_COLD,  16,  500,    65,    1000,                         FL_DRAGON, "white dragon")
 MONSTER(ELF,             'e',  5,    3,   3,       SA_NONE,  15,   50,    25,      33,                           FL_NONE, "elf")
-MONSTER(CUBE,            'g',  5,    9,   3,       SA_NONE,   3,    0,    24,      43,                           FL_NONE, "gelatinous cube")
+MONSTER(CUBE,            'g',  5,    9,   3,       SA_NONE,   3,    0,    24,      43,                          FL_DULLS, "gelatinous cube")
 MONSTER(METAMORPH,       'm',  6,    9,   3,       SA_NONE,   3,    0,    32,      40,                           FL_SLOW, "metamorph")
 MONSTER(VORTEX,          'v',  6,    5,   4,       SA_NONE,   3,    0,    33,      53,                           FL_NONE, "vortex")
-MONSTER(ZILLER,          'z',  6,   15,   3,       SA_NONE,   3,    0,    34,      33,                           FL_NONE, "ziller")
+
+// Zill: a large carnivorous mustelid; its much smaller subspecies is known as the wee zill.
+MONSTER(ZILL,            'z',  6,   15,   3,       SA_NONE,   3,    0,    34,      33,                           FL_NONE, "zill")
+
 MONSTER(VIOLETFUNGI,     'F',  6,   12,   3,       SA_NONE,   3,    0,    39,      90,                           FL_NONE, "violet fungus")
 MONSTER(WRAITH,          'W',  6,    3,   1,      SA_DRAIN,   3,    0,    36,     300,                          FL_NOPIT, "wraith")
 MONSTER(FORVALAKA,       'f',  6,    3,   5,       SA_NONE,   7,    0,    55,     270,                           FL_NONE, "forvalaka")
@@ -57,9 +60,9 @@ MONSTER(OSEQUIP,         'o',  7,    4,   7,    SA_BIGBITE,   4,    0,    36,   
 MONSTER(ROTHE,           'r',  7,   15,   5,       SA_NONE,   3,  100,    53,     230,                           FL_NONE, "rothe")
 MONSTER(XORN,            'X',  7,    6,   7,       SA_NONE,  13,    0,    63,     290,                           FL_NONE, "xorn")
 MONSTER(VAMPIRE,         'V',  7,    5,   4,      SA_DRAIN,  17,    0,    55,     950,                          FL_NOPIT, "vampire")
-MONSTER(INVISIBLESTALKER,' ',  7,    5,   6,       SA_NONE,   5,    0,    55,     330,                           FL_SLOW, "invisible stalker")
+MONSTER(INVISIBLESTALKER,'I',  7,    5,   6,       SA_NONE,   5,    0,    55,     330,              FL_INVISIBLE|FL_SLOW, "invisible stalker")
 MONSTER(POLTERGEIST,     'p',  8,    1,   8,       SA_NONE,   3,    0,    55,     430,                          FL_NOPIT, "poltergeist")
-MONSTER(DISENCHANTRESS,  'q',  8,    3,   1, SA_DISENCHANT,   3,    0,    57,     500,                           FL_NONE, "disenchantress")
+MONSTER(DISENCHANTRESS,  'q',  8,    3,   1, SA_DISENCHANT,   3,    0,    57,     500,                          FL_DULLS, "disenchantress")
 MONSTER(SHAMBLINGMOUND,  's',  8,   13,   5,       SA_NONE,   6,    0,    47,     390,                           FL_NONE, "shambling mound")
 MONSTER(YELLOWMOLD,      'y',  8,   12,   4,       SA_NONE,   3,    0,    37,     240,                           FL_NONE, "yellow mold")
 MONSTER(UMBERHULK,       'U',  8,    6,   7,    SA_CONFUSE,  14,    0,    67,     600,                           FL_NONE, "umber hulk")

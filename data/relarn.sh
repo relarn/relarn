@@ -20,6 +20,11 @@ fi
 
 export RELARN_INSTALL_ROOT=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." ; pwd)
 
+# For macOS, we need to set the dylib load path to find the shared libs.
+if [[ "`uname -s`" = "Darwin" ]]; then
+    export DYLD_LIBRARY_PATH="$RELARN_INSTALL_ROOT/lib/relarn/"
+fi
+
 if [ ! -x "$RELARN_INSTALL_ROOT/lib/relarn/relarn$bin" ]; then
     echo "Incomplete relarn installation."
     exit 1

@@ -1,0 +1,133 @@
+## Sample ~/.relarn/relarnrc file
+
+## The default character is a Pratchett reference, as required by law
+# name:       Eskarina
+# character:  Wizard
+# female
+# spouse_male
+
+## Gender options:
+# female
+# male
+# nonbinary
+
+## Spouse gender options
+# spouse_female
+# spouse_male
+# spouse_nonbinary
+
+
+## Difficulty setting for new games.  This should be a number between
+## 0 and 100.  The default is 0.
+##
+## WARNING: This is unsupported.  This has not been tested in a long
+## time and tends to just make the game unpleasant.  USE AT YOUR OWN
+## RISK!
+# difficulty: 0
+
+## Disable the "beep"; this is currently usually a visual flash anyway,
+## but you can turn it off here.
+# no-beep
+
+## Set the command to run the email client for reading post-win junk
+## mail.  The sequence '%s' will be replaced with the path to the
+## folder; if it is missing, the folder path will be appended.  Note
+## that there is no way to escape the %s.  The folder is a standard
+## mbox file.
+##
+## (`mutt` is ideal but `less` will do in a pinch.  Alternately, just
+## leave it empty; the mailfile will still be there when you want to
+## open it with something else.)
+##
+#email-client: mutt -f
+
+## Identical to 'email-client:' but will be used instead of it (if
+## set) by the SDL-based verison of relarn.  This is handy because you
+## can use it to set a mail reader that opens in a new window while
+## staying in the current window in console mode.
+##
+## Set the email client to use when running the SDL (i.e. windowed)
+## version.  This is just like 'email-client' except that it will
+## override your 'email-client' value if and only if this is the
+## windowed version of ReLarn.
+##
+#gui-email-client: rxvt -e mutt -f "%s"
+
+
+## Disable dramatic pauses
+# no-nap
+
+## Hilight the visible field of view (if supported).  Disable if you
+## don't like this newfangled stuff.
+# show-fov
+# no-show-fov
+
+## Colour unexplored cells differently from floor cells (if supported)
+# show-unrevealed
+# no-show-unrevealed
+
+## Disable the introductory text on a new game *ONLY IF* the character
+## has already been defined here.  If you have to specify a character,
+## you're going to see the intro as well.  (Honestly, this is kind of
+## a pointless feature; it takes one keystroke skip it.)
+# no-introduction
+
+## Choose colours assuming light text on a dark background rather than
+## the reverse.  Also invert (i.e. show as dark) things that fall
+## within the field of view if 'show-fov' is enabled.  This latter
+## feature is useful even when all colours have been set with
+## 'colors:'.
+# dark-screen
+
+## The opposite of dark-screen.  Useful because 'dark-screen' is the
+## default on some UI backends but not others (specifically SDL).
+# light-screen
+
+## Time in real-world seconds (plus the time to the next player move)
+## to keep a stat highlighted on the screen after it has changed.
+## Defaults to 4; setting it to 0 disables the feature
+# hilight-persist: 4
+
+## Hilight a changed stat by showing it in reverse video instead of
+## bold.
+# hilight-reverse
+
+## Path to the font file to use.  Leading '+' expands to your relarn
+## config directory.  Ignored if unsupported.
+
+## Specify the font to use on those platforms that support it
+## (i.e. just SDL for now).
+##
+## Format is size followed by the path of the TrueType font to load
+## with a comma (',') between them.  The size is optional and may be
+## ommitted (with or without the comma) or set to 0.
+# font: 20,+fonts/modern-terminus/TerminusTTF-4.46.0.ttf
+
+
+## Alternate RGB values for the curses colors.  Supported by SDL and
+## some terminals.
+##
+## Colours are presented as 6 hex values (red, green and blue values
+## in pairs of hex digits; just like html but without the leading
+## '#').  Alternately, a single minus sign ('-') may be given to leave
+## that colour value unchanged.
+##
+## These are always honoured under SDL and will sometimes be honoured
+## on on a terminal.  Note, though that (some?) terminals will not use
+## any of the named colours for the foreground and background.
+##
+## On SDL, magenta is used to colour unexplored squares and so should
+## be set to something reasonable.  (We use it because it's not used
+## for anything else.)  On terminals, unexplored spaces are either
+## black or white (depending on 'dark-screen'); empty spaces are the
+## terminal default background, which should be different.
+##
+##        black  red    green  yellow  blue   mgnta  cyan    white
+#colors:  000000 FF0000 00FF00 FFFF00  0000FF FF00FF 00FFFF  FFFFFF
+
+## Example schemes:
+## Green monitor - mimics a green monochrome CRT monitor
+#colors:  222222 009900 00FF00 00FF00  0000FF 004400 00BB00  00AA00
+
+## Modern Green - Similar to Green Monitor but with more colours
+#colors:  000000 FF7777 00FF00 FFFF00  0000FF 004400 00FFFF  00CC00

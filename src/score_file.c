@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "score_file.h"
@@ -6,6 +6,7 @@
 #include "internal_assert.h"
 
 #include "game.h"
+#include "ui.h"
 
 #include "settings.h"
 #include "os.h"
@@ -15,7 +16,7 @@
 #define SCORE_LINE_MAX 300
 
 struct ScoreBoardEntry {
-    long        uid;                    // the user id number of the player
+    char        uid[OS_UID_STR_MAX+1];  // OS-specific user id rendered as a string
     long        won;                    // did the player win?  1 = yes, 0 = no
     long        score;                  // the score of the player
     long        taxes;                  // taxes owed for this game
@@ -23,29 +24,28 @@ struct ScoreBoardEntry {
     long        level;                  // final cave level
     long        exp_level;              // final experience level
     long        gender;                 // Character gender
-    char        who[PLAYERNAME_MAX];    // the name of the character        
+    char        who[PLAYERNAME_MAX];    // the name of the character
     char        cclass[20];             // the character class
     char        ending[80];             // how the player met their end
 };
 
 
-/* Create the scoreboard if it's not there.*/
+// Ensure we can write to the scoreboard file.  Also creates it if it
+// doesn't exist.
 void
 ensureboard() {
-    if (freadable(scoreboard_path())) {
-        return;
-    }/* if */
+    const char *sbpath = scoreboard_path();
 
-    FILE *fh = fopen(scoreboard_path(), "w");
+    FILE *fh = fopen(sbpath, "ab");
     ENSURE_MSG(fh, "Unable to write to scorefile.");
-    fclose(fh);
 
     // We're going to test locking here and then just sort of assume
     // it'll work from now on.  (I wouldn't do this for important
     // software, but this is a game's scorefile so it's good enough.)
-    LOCK_HANDLE lh = lock_file(scoreboard_path());
-    ENSURE_MSG(lock_success(lh), "Unable to lock scorefile.");
-    unlock_file(lh);
+    ENSURE_MSG(lock_file(fh), "Unable to lock scorefile.");
+    unlock_file(fh);
+
+    fclose(fh);
 }/* ensureboard*/
 
 
@@ -63,8 +63,8 @@ static char *
 encode(const struct ScoreBoardEntry* dest) {
     static char buffer[SCORE_LINE_MAX];
 
-    snprintf(buffer, sizeof(buffer), 
-             "%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%s\t%s\n",
+    snprintf(buffer, sizeof(buffer),
+             "%s\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%s\t%s\n",
              dest->uid,
              dest->won,
              dest->score,
@@ -93,12 +93,12 @@ decode(char *line, struct ScoreBoardEntry* dest) {
 
     char *pos;
     char *lp = line;
-    
+
     struct {
         bool is_num;
         void *outptr;
         size_t max;
-    } outputs[] = { {true,   &dest->uid,        sizeof(long)},
+    } outputs[] = { {false,  &dest->uid,        sizeof(dest->uid)},
                     {true,   &dest->won,        sizeof(long)},
                     {true,   &dest->score,      sizeof(long)},
                     {true,   &dest->taxes,      sizeof(long)},
@@ -114,7 +114,7 @@ decode(char *line, struct ScoreBoardEntry* dest) {
         char *val = strtok_r(lp, "\t", &pos);
         if (!val) { return false; }
         lp = NULL;
-        
+
         if (outputs[n].is_num) {
             char *end = "x";
             long *lop = (long *)outputs[n].outptr;
@@ -125,7 +125,7 @@ decode(char *line, struct ScoreBoardEntry* dest) {
             strncpy(op, val, outputs[n].max);
             op[outputs[n].max - 1] = 0;  // Ensure null-term.
         }// if .. else
-    }// for 
+    }// for
 
     return true;
 }// decode
@@ -151,14 +151,14 @@ static struct ScoreBoardEntry *
 load_scorefile(size_t *count) {
     *count = 0;
 
-    FILE *fh = fopen(scoreboard_path(), "rb");
+    FILE *fh = fopen(scoreboard_path(), "r+b");
     if (!fh) { return NULL; }
 
-    LOCK_HANDLE lh = lock_file(scoreboard_path());
-    
+    lock_file(fh);
+
     struct ScoreBoardEntry *result = NULL;
     size_t num_entries = 0;
-    bool error = false; 
+    bool error = false;
 
     for (int n = 0; ; n++) {
         struct ScoreBoardEntry item;
@@ -179,17 +179,17 @@ load_scorefile(size_t *count) {
         ++num_entries;
         result = xrealloc(result, num_entries * sizeof(struct ScoreBoardEntry));
         memcpy(&result[num_entries - 1], &item, sizeof(struct ScoreBoardEntry));
-    }// for 
+    }// for
 
+    unlock_file(fh);
     fclose(fh);
-    unlock_file(lh);
 
     if (error) {
         free(result);
         *count = 42;
         return NULL;
     }
-    
+
     qsort(result, num_entries, sizeof(struct ScoreBoardEntry), cmp_sbe);
 
     *count = num_entries;
@@ -204,7 +204,7 @@ newscore(long score, bool won, int level, const char *ending,
          const struct Player *uu) {
     struct ScoreBoardEntry sb;
 
-    sb.uid = get_user_id();
+    strncpy(sb.uid, get_user_id(), OS_UID_STR_MAX);
     strncpy(sb.who, uu->name, sizeof(sb.who));
     strncpy(sb.cclass, ccname(uu->cclass), sizeof(sb.cclass));
     sb.gender = uu->gender;
@@ -225,16 +225,16 @@ newscore(long score, bool won, int level, const char *ending,
     // Sanitize the strings
     sanitize(&sb);
 
-    LOCK_HANDLE lh = lock_file(scoreboard_path());
-    
-    FILE *fh = fopen(scoreboard_path(), "a");
+
+    FILE *fh = fopen(scoreboard_path(), "ab");
     if (!fh) { return false; }
+    lock_file(fh);
 
     int status = fputs(encode(&sb), fh);
+
+    unlock_file(fh);
     fclose(fh);
 
-    unlock_file(lh);
-    
     return status >= 0;
 }/* newscore*/
 
@@ -244,21 +244,21 @@ long
 get_taxes_owed() {
     long taxes = -1;
     if (taxes >= 0) { return taxes; }
-        
+
     size_t len = 0;
     struct ScoreBoardEntry *items = load_scorefile(&len);
     if (!items) {
         return 0;
-    }// if 
+    }// if
 
-    const long userid = get_user_id();
-    
+    const char * userid = get_user_id();
+
     for (size_t n = 0; n < len; n++) {
-        if (items[n].uid == userid && items[n].won) {
+        if (streq(items[n].uid, userid) && items[n].won) {
             taxes = items[n].taxes;
             break;
-        }// if 
-    }// for 
+        }// if
+    }// for
 
     free(items);
     return taxes;
@@ -267,38 +267,103 @@ get_taxes_owed() {
 
 void
 showscores(bool all) {
+    char buffer[200];
+
+
+    struct TextBuffer *dest = tb_malloc(INF_BUFFER, SCREEN_W);
+    
     size_t len = 0;
     struct ScoreBoardEntry *items = load_scorefile(&len);
 
     if (!items) {
-        printf(len == 0 ? "No scores yet.\n" : "Score file is corrupt!\n");
+        tb_append(dest, "\n\n\n");
+        tb_append(dest,
+                  len == 0 ? "No scores yet." : "Score file is corrupt!");
         return;
-    }// if 
+    }// if
 
+    // Heading
+    snprintf(buffer, sizeof(buffer),
+             "%-9s %-5s %-9s %-3s %-5s\n",
+             "Score", "", "Challenge", "Floor", "Level");
+    tb_append(dest, buffer);
 
-    printf("%-9s %-5s %-9s %-3s %-5s\n", "Score", "", "Challenge", "Floor", "Level");
-    
     size_t n;
     for (n = 0; n < len; n++) {
         struct ScoreBoardEntry item = items[n];
 
         if (!all && !item.won) { continue; }
-        
+
         char nbuf[sizeof(item.who) + sizeof(item.cclass) + 60];
         snprintf(nbuf, sizeof(nbuf), "%s the %s %s", item.who,
                  female((enum GENDER)item.gender), item.cclass);
 
-        printf("%9ld %-5s %-9d %-5d %-5d\n%s, you %s\n",
-               item.score,
-               (all && item.won) ? "(won)" : "",
-               (int)item.challenge + 1,
-               (int)item.level,
-               (int)item.exp_level,
-               nbuf,
-               item.ending);
-    }// for 
+        snprintf(buffer, sizeof(buffer),
+                 "%9ld %-5s %-9d %-5d %-5d\n%s, you %s\n",
+                 item.score,
+                 (all && item.won) ? "(won)" : "",
+                 (int)item.challenge + 1,
+                 (int)item.level,
+                 (int)item.exp_level,
+                 nbuf,
+                 item.ending);
+        tb_append(dest, buffer);
+    }// for
+
+    showpages(dest);
+
+    tb_free(dest);
 }/* showscores*/
 
 
 
+// Write the scores to a file (or stdout where supported).
+bool
+write_scores(const char *filename) {
+    FILE *fh = NULL;
 
+    if (streq(filename, "-")) {
+        fh = stdout;
+    } else {
+        fh = fopen(filename, "w");
+        if (!fh) {
+            return false;
+        }// if
+    }// if .. else
+
+    fprintf(fh,
+            "# name\tgender\tclass\tscore\twon?\tskill\tfloor\t"
+            "exp\tending description\n");
+
+    size_t len = 0;
+    struct ScoreBoardEntry *items = load_scorefile(&len);
+
+    size_t n;
+    for (n = 0; n < len; n++) {
+        struct ScoreBoardEntry item = items[n];
+
+        fprintf(fh,
+
+                "%s\t%s\t%s\t" "%ld\t%s\t" "%d\t%d\t%d\t%s",
+
+                item.who,
+                female((enum GENDER)item.gender),
+                item.cclass,
+
+                item.score,
+                item.won ? "won" : "failed",
+
+                (int)item.challenge + 1,
+                (int)item.level,
+                (int)item.exp_level,
+                item.ending);
+    }// for
+
+    free(items);
+    
+    if (fh != stdout) {
+        fclose(fh);
+    }// if
+
+    return true;
+}// write_scores

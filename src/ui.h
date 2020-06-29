@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // This is the abstraction layer around the user interface.  The
@@ -13,8 +13,9 @@
 
 #include "textbuffer.h"
 #include "picklist.h"
-#include "player.h"
-
+#include "gender.h"
+#include "char_ids.h"
+#include "util.h"
 
 #define SCREEN_W 80
 #define SCREEN_H 25
@@ -43,13 +44,12 @@ enum INDICATOR {
 };
 
 enum MAPFLAGS {
-    MF_DEFAULT,     /* Standard map square. */
-    MF_OBJ,         /* Most objects.  Typically reverse video. */
-    MF_EFFECT,      /* Special effects (e.g. magical bolts). */
-    MF_PLAYER,      /* The player.  Highlighted somehow. */
-    MF_PLAYER_INV,  /* The player, but invisible.  Different color. */
-    MF_NOTSEEN,     /* This cell has not been explored yet. */
-    MF_FOV,         /* This cell is within the player's field of view. */
+    MFL_DEFAULT,     /* Standard map square. */
+    MFL_OBJ,         /* Most objects.  Typically reverse video. */
+    MFL_EFFECT,      /* Special effects (e.g. magical bolts). */
+    MFL_PLAYER,      /* The player.  Highlighted somehow. */
+    MFL_PLAYER_INV,  /* The player, but invisible.  Different color. */
+    MFL_NOTSEEN,     /* This cell has not been explored yet. */
 };
 
 
@@ -61,10 +61,11 @@ void sync_ui(bool force);
 char map_getch(void);
 
 
-void showstats(const struct Player *p, bool iswiz, bool force);
-void mapdraw(int x, int y, char symbol, enum MAPFLAGS flags);
+void showstats(bool iswiz, bool force);
+void mapdraw(int x, int y, char symbol, enum MAPFLAGS flags, bool isFoV,
+             bool isTown);
 void say(const char *fmt, ...);
-void show_indicators(const struct Player *uu, bool force);
+void show_indicators(bool force);
 
 char menu(const char *heading, const char* items);
 
@@ -87,10 +88,17 @@ char quickinv(const char *action, const char *candidates, bool dashForNone,
 DIRECTION promptdir(bool allowCancel);
 void billboard(bool center, const char *heading, ...);
 void say(const char *fmt, ...);
+void scroll_back(void);
+void scroll_forward(void);
+
 
 void nap(int x);
 
 void headsup(void);
+
+void notify(const char *fmt, ...);
+
+bool is_tty(void);  // HACK ALERT: Defined in curses_extensions_*.c
 
 #endif
 

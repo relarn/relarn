@@ -1,8 +1,10 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // Various non-monster-death game endings (most of which are bad)
-ENDING(DDSELFANNIH,     "hit your own sphere of annhilation.")
+ENDING(DDSELFANNIH,     "hit your own sphere of annihilation.")
+ENDING(DDHOMEANNIH,     "killed your family with a sphere of annihilation.")
+ENDING(DDSPHERE,        "were killed by exploding sphere of annihilation.")
 ENDING(DDARROW,         "were shot by an arrow.")
 ENDING(DDDART,          "were hit by a dart.")
 ENDING(DDPIT,           "fell into a pit.")
@@ -21,6 +23,5 @@ ENDING(DDMAGICOOPS,     "were hit by your own magic.")
 ENDING(DDUNSEEN,        "were demolished by an unseen attacker.")
 ENDING(DDSLEEP,         "fell into the dreadful sleep.")
 ENDING(DDCHEST,         "were killed by an exploding chest.")
-ENDING(DDSPHERE,        "were killed by exploding sphere of annihilation.")
 ENDING(DDGENIE,         "pissed off a genie.")
 ENDING(DDHELLEVATOR,    "took an elevator straight to HELL!!!")

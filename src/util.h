@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // This module contains the general(ish) purpose utility code.
@@ -6,11 +6,15 @@
 #ifndef HDR_GUARD_UTIL_H
 #define HDR_GUARD_UTIL_H
 
+#include "os.h"
+
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdbool.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
+
 
 
 /* Symbolic names for directions of movement.  Must be kept in synch
@@ -39,7 +43,7 @@ void *xcalloc(size_t count, size_t size);
 char *xstrdup(const char *);
 void *xrealloc(void *ptr, size_t size);
 char **splitstring(const char* orig, int* nitems);
-void adjpoint(int x, int y, DIRECTION dir, int *outx, int *outy);
+void adjpoint(int8_t x, int8_t y, DIRECTION dir, int8_t *outx, int8_t *outy);
 
 const char *an(const char *word);
 
@@ -52,6 +56,10 @@ static inline long max_l(long x, long y) { return x < y ? y : x; }
 
 static inline int clamp(int amt, int minv, int maxv) {
     return min(max(amt, minv), maxv);
+}
+
+static inline DIRECTION randdir() {
+    return rund(DIR_MAX - DIR_MIN_DIR) + DIR_MIN_DIR;
 }
 
 // Normalize all whitespace characters to space so they can be used as

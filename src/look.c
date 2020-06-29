@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -12,13 +12,14 @@
 #include "game.h"
 #include "action.h"
 #include "bank.h"
+#include "ui.h"
 
 #include <unistd.h>
 
 static void finditem(void);
 static void olamp();
 static void ogold();
-static void fch(int how, long *x);
+static void fount_change(int how, struct Stat *x);
 static void fntchange(int how);
 static void oaltar(void);
 static void othrone(void);
@@ -55,13 +56,16 @@ static void ocaveexit(void);
 // The last square looked at; we use this to keep the "you see a..."
 // prompt from coming up if you've already seen it.
 static int prevlook_x = -1, prevlook_y = -1, prevlook_lvl = -1;
+static uint8_t prev_obj_type = ONONE;
 
 // Test if we've already seen this location
 static bool
 skip_looking() {
-    return prevlook_x == UU.x &&
-        prevlook_y == UU.y &&
-        prevlook_lvl == getlevel();
+    return
+        prevlook_x == UU.x                          &&
+        prevlook_y == UU.y                          &&
+        prevlook_lvl == getlevel()                  &&
+        at(UU.x, UU.y)->obj.type == prev_obj_type;
 }// skip_looking
 
 // Mark the current location as unseen so that the next call to
@@ -69,6 +73,7 @@ skip_looking() {
 void
 force_look () {
     prevlook_x = prevlook_y = prevlook_lvl = -1;
+    prev_obj_type = ONONE;
 }// clear_looked_here
 
 // Mark the current location as seen.
@@ -77,6 +82,7 @@ cancel_look() {
     prevlook_x = UU.x;
     prevlook_y = UU.y;
     prevlook_lvl = getlevel();
+    prev_obj_type = at(UU.x, UU.y)->obj.type;
 }// cancel_look
 
 
@@ -87,6 +93,7 @@ lookforobject() {
     int i;
     struct Object thing;
 
+    
     // Skip looking if we've already seen it.
     {
         bool looked_already = skip_looking();
@@ -97,7 +104,7 @@ lookforobject() {
     /* can't find objects is time is stopped*/
     if (UU.timestop) { return false; }
 
-    thing = Map[UU.x][UU.y].obj;
+    thing = at(UU.x, UU.y)->obj;
     if (isnone(thing) || thing.type == OWALL) { return false; }
 
     // The player has moved and the game may prompt, so we need to
@@ -289,11 +296,11 @@ static void
 otrapdoor() {
     bool invisible;
 
-    invisible = Map[UU.x][UU.y].obj.type == OIVTRAPDOOR;
+    invisible = at(UU.x, UU.y)->obj.type == OIVTRAPDOOR;
 
     if (invisible) {
         if (rnd(17) < 13) return;
-        Map[UU.x][UU.y].obj = obj(OTRAPDOOR, 0);
+        at(UU.x, UU.y)->obj = obj(OTRAPDOOR, 0);
         see_at(UU.x, UU.y);
     }/* if */
 
@@ -314,7 +321,7 @@ otrapdoor() {
     headsup();
     losehp(rnd(5+getlevel()), DDTRAPDOOR);
     nap(2000);
-    setlevel(getlevel()+1);
+    setlevel(getlevel()+1, true);
 
     update_display();
 }/* otrapdoor*/
@@ -327,7 +334,7 @@ opointytraps() {
     bool invisible, isDart;
     const char *arrow;
 
-    atThing = &Map[UU.x][UU.y].obj;
+    atThing = &at(UU.x, UU.y)->obj;
 
     invisible = atThing->type == OTRAPARROWIV || atThing->type == OIVDARTRAP;
     isDart = atThing->type == OIVDARTRAP || atThing->type == ODARTRAP;
@@ -336,7 +343,7 @@ opointytraps() {
     /* If the trap is undiscovered, roll to see if it was tripped. */
     if (invisible) {
         if (rnd(17) < 13) return;
-        Map[UU.x][UU.y].obj = obj(isDart ? ODARTRAP : OTRAPARROW, 0);
+        at(UU.x, UU.y)->obj = obj(isDart ? ODARTRAP : OTRAPARROW, 0);
     }/* if */
 
     say("You are hit by %s %s!\n", an(arrow), arrow);
@@ -344,8 +351,7 @@ opointytraps() {
 
     if (isDart) {
         losehp(rnd(5), DDDART);
-        // TODO: distinguish between base and total
-        if ((--UU.strength) < 3) UU.strength = 3;
+        strength_adjust(-1);
     } else {
         losehp(rnd(10)+getlevel(), DDARROW);
     }/* if .. else*/
@@ -369,16 +375,16 @@ ovoldown() {
         return;
     }/* if */
 
-    if (packweight() > 45+3*(UU.strength+UU.strextra)) {
+    if (packweight() > 45+3*strength()) {
         say("You slip and fall down the shaft.\n");
         headsup();
         losehp(30+rnd(20), DDSHAFT);
     } else {
-        say("climb down.");
+        say("climb down.\n");
     }/* if .. else*/
 
     nap(3000);
-    setlevel(VTOP); /* down to V1 */
+    setlevel(VTOP, true); /* down to V1 */
     UU.x = rnd(MAXX-2);
     UU.y = rnd(MAXY-2);
     positionplayer();
@@ -399,7 +405,7 @@ ovolup() {
         return;
     }/* if */
 
-    if (packweight() > 40+5*(UU.dexterity+UU.strength+UU.strextra)) {
+    if (packweight() > 40+5*( dexterity() + strength() )) {
         say("You slip and fall down the shaft.\n");
         headsup();
         losehp(15+rnd(20), DDSHAFT);
@@ -409,7 +415,7 @@ ovolup() {
     say("climb up.\n");
 
     nap(3000);
-    setlevel(0);
+    setlevel(0, true);
 
     findobj(OVOLDOWN, &UU.x, &UU.y);
 
@@ -429,7 +435,7 @@ oentrance() {
     }/* if */
 
     /* Move the player to level 1, creating it if necessary. */
-    setlevel(1);
+    setlevel(1, true);
     findobj(OEXIT, &UU.x, &UU.y);
 
     /* Update the display. */
@@ -448,7 +454,7 @@ ocaveexit() {
         return;
     }/* if */
 
-    setlevel(0);
+    setlevel(0, true);
     findobj(OENTRANCE, &UU.x, &UU.y);
     update_display();
 }/* ocaveexit*/
@@ -456,7 +462,7 @@ ocaveexit() {
 static void
 ocloseddoor() {
     char opt;
-    struct Object thing = Map[UU.x][UU.y].obj;
+    struct Object thing = at(UU.x, UU.y)->obj;
 
     say("You find %s. ", objname(thing));
 
@@ -487,7 +493,7 @@ ocloseddoor() {
 
         case DT_WEAKEN:
             say("You suddenly feel weaker!\n");
-            if (UU.strength>3) UU.strength--;
+            strength_adjust(-1);
             break;
 
         default:
@@ -501,7 +507,7 @@ ocloseddoor() {
     }/* if */
 
     udelobj();
-    Map[UU.x][UU.y].obj = obj(OOPENDOOR, 0);
+    at(UU.x, UU.y)->obj = obj(OOPENDOOR, 0);
 }/* ocloseddoor*/
 
 
@@ -518,11 +524,11 @@ ospeed() {
         UU.hasteSelf += 200 + UU.level;
         UU.halfdam += 300 + rnd(200);
 
-        if ((UU.intelligence-=2) < 3)  UU.intelligence = 3;
-        if ((UU.wisdom-=2) < 3)        UU.wisdom = 3;
-        if ((UU.constitution-=2) < 3)  UU.constitution = 3;
-        if ((UU.dexterity-=2) < 3)     UU.dexterity = 3;
-        if ((UU.strength-=2) < 3)      UU.strength = 3;
+        intelligence_adjust(-2);
+        wisdom_adjust(-2);
+        constitution_adjust(-2);
+        dexterity_adjust(-2);
+        strength_adjust(-2);
 
         udelobj();
     } else if (opt == 't') {
@@ -544,10 +550,12 @@ ohash() {
     if (opt == 'g') {
         say("smoke!\nWOW! You feel stooooooned...\n");
         UU.hastemonst += rnd(75)+25;
-        UU.intelligence += 2;
-        UU.wisdom += 2;
-        if( (UU.constitution-=2) < 3) UU.constitution = 3;
-        if( (UU.dexterity-=2) < 3)    UU.dexterity = 3;
+
+        intelligence_adjust(2);
+        wisdom_adjust(2);
+        constitution_adjust(-2);
+        dexterity_adjust(-2);
+
         UU.halfdam += 300 + rnd(200);
         UU.clumsiness += rnd(1800) + 200;
         udelobj();
@@ -568,26 +576,16 @@ oacid() {
     opt = prompt("Do you (g) eat it, (t) take it, or (n) do nothing? ");
 
     if (opt == 'g') {
-        int j,k;
-
         say("eat!\n");
         say("You are now frying your ass off!\n");
 
         UU.confuse += 30 + rnd(10);
-        UU.wisdom += 2;
-        UU.intelligence += 2;
+        wisdom_adjust(2);
+        intelligence_adjust(2);
         UU.awareness += 1500;
         UU.aggravate += 1500;
 
-        /* heal monsters */
-        for(j=0;j<MAXY;j++) {
-            for(k=0;k<MAXX;k++) {
-                uint8_t monID = Map[k][j].mon.id;
-                if (monID) {
-                    Map[k][j].mon.hitp = mon_hp(monID);
-                }/* if */
-            }/* for*/
-        }/* for*/
+        heal_monsters();
 
         udelobj();
     } else if (opt == 't') {
@@ -612,8 +610,8 @@ oshrooms() {
         say("Things start to get real spacey...\n");
         UU.hastemonst   += rnd(75) + 25;
         UU.confuse      += 30+rnd(10);
-        UU.wisdom       += 2;
-        UU.charisma     += 2;
+        wisdom_adjust(2);
+        charisma_adjust(2);
         udelobj();
     } else if (opt == 't') {
         say("take.\n");
@@ -636,11 +634,12 @@ ocoke() {
     if (opt == 'g') {
         say("snort!\n");
         say("Your nose begins to bleed!\n");
-        if ((UU.dexterity -= 2) < 3)     UU.dexterity=3;
-        if ((UU.constitution -= 2) < 3)  UU.constitution=3;
-        UU.charisma += 3;
-        add_to_base_stats(33);
+
+        dexterity_adjust(-2);
+        constitution_adjust(-2);
+        charisma_adjust(3);
         UU.coked += 10;
+
         udelobj();
     } else if (opt == 't') {
         say("take.\n");
@@ -654,7 +653,7 @@ ocoke() {
 /* Handle entering various shops and buildings. */
 static void
 oshop() {
-    struct Object thing = Map[UU.x][UU.y].obj;
+    struct Object thing = at(UU.x, UU.y)->obj;
     char promptText[200];
     char opt;
     bool isPad = thing.type == OPAD;
@@ -701,12 +700,12 @@ oshop() {
 static void
 osimple() {
     struct Object thing;
-    const char *msg;
+    const char *msg = "";
 
     if (nearbymonst()) return;
 
     /* Yes, this repeats code in the caller. */
-    thing = Map[UU.x][UU.y].obj;
+    thing = at(UU.x, UU.y)->obj;
 
     switch (thing.type) {
     case OSTATUE:
@@ -714,7 +713,7 @@ osimple() {
         break;
 
     case OMIRROR:
-        msg ="There is a mirror here.";
+        msg = "There is a mirror here.";
         break;
 
     case ODEADFOUNTAIN:
@@ -737,13 +736,13 @@ static void
 oteleport_trap() {
     struct Object *atThing;
 
-    atThing = &Map[UU.x][UU.y].obj;
+    atThing = &at(UU.x, UU.y)->obj;
 
     /* If it's a hidden (unknown) trap, first reveal it (unless the
      * player hasn't set it off. */
     if (atThing->type == OIVTELETRAP) {
         if (rnd(11)<6) return;  /* If it wasn't set off... */
-        Map[UU.x][UU.y].obj.type = OTELEPORTER;
+        at(UU.x, UU.y)->obj.type = OTELEPORTER;
         see_at(UU.x, UU.y);
     }/* if */
 
@@ -765,7 +764,7 @@ finditem() {
 
     if (nearbymonst()) return;
 
-    itm = Map[UU.x][UU.y].obj;
+    itm = at(UU.x, UU.y)->obj;
 
     if (Types[itm.type].flags & (OA_WEARABLE|OA_WIELDABLE) && itm.iarg > 0) {
         snprintf(attrib, sizeof(attrib), " +%u", (unsigned) itm.iarg);
@@ -802,7 +801,7 @@ take_stairs(int distance) {
 
     /* Find the matching stairs and place the player there. */
     entryType = (distance > 0) ? OSTAIRSUP : OSTAIRSDOWN;
-    setlevel(level + distance);
+    setlevel(level + distance, true);
     findobj(entryType, &UU.x, &UU.y);
 
     /* Update the display. */
@@ -813,7 +812,7 @@ take_stairs(int distance) {
 // Function to handle staircases, both up and down.
 static void
 ostairs() {
-    struct Object obj = Map[UU.x][UU.y].obj;
+    struct Object obj = at(UU.x, UU.y)->obj;
 
     ASSERT(obj.type == OSTAIRSUP || obj.type == OSTAIRSDOWN);
     bool up = obj.type == OSTAIRSUP;
@@ -851,7 +850,7 @@ lamp_spell() {
 
     ASSERT(spell_id >= 0 && spell_id < SPNUM);
 
-    GS.spellknow[spell_id] = true;
+    UU.spellknow[spell_id] = true;
     say("Spell \"%s\": %s\n%s\n", Spells[spell_id].code,
         Spells[spell_id].name, Spells[spell_id].desc);
 }/* lamp_spell*/
@@ -931,13 +930,13 @@ static void
 ogold() {
     long i;
 
-    ASSERT (Map[UU.x][UU.y].obj.type == OGOLDPILE);
+    ASSERT (at(UU.x, UU.y)->obj.type == OGOLDPILE);
 
-    i = Map[UU.x][UU.y].obj.iarg;
+    i = at(UU.x, UU.y)->obj.iarg;
     say("You find %d gold piece%s.\n",i, i==1 ? "": "s");
     UU.gold += i;
 
-    Map[UU.x][UU.y].obj = NULL_OBJ;
+    at(UU.x, UU.y)->obj = NULL_OBJ;
 }/* ogold*/
 
 
@@ -1037,7 +1036,7 @@ function to process a potion
 static void
 opotion() {
     struct Object pot;
-    pot = Map[UU.x][UU.y].obj;
+    pot = at(UU.x, UU.y)->obj;
 
     ASSERT(ispotion(pot));
 
@@ -1068,12 +1067,12 @@ raiserandom() {
     int stat = rund(6);
 
     switch (stat) {
-    case 0: ++UU.strength; break;
-    case 1: ++UU.intelligence; break;
-    case 2: ++UU.wisdom; break;
-    case 3: ++UU.constitution; break;
-    case 4: ++UU.dexterity; break;
-    case 5: ++UU.charisma; break;
+    case 0: strength_adjust(1); break;
+    case 1: intelligence_adjust(1); break;
+    case 2: wisdom_adjust(1); break;
+    case 3: constitution_adjust(1); break;
+    case 4: dexterity_adjust(1); break;
+    case 5: charisma_adjust(1); break;
     }/* switch */
 }/* raiserandom*/
 
@@ -1086,14 +1085,14 @@ void
 quaffpotion(struct Object pot) {
     ASSERT (ispotion(pot));
 
-    Types[pot.type].isKnown = true;  /* We know what it is *now* */
+    identify(pot.type);  /* We know what it is *now* */
 
     say("You drink %s.\n", objname(pot));
 
     switch(pot.type) {
     case OPSLEEP:
         say("You fall asleep...\n");
-        int i = rnd(11)-(UU.constitution>>2)+2;
+        int i = rnd(11)-(constitution()>>2)+2;
         while(--i>0) {
             onemove(DIR_STAY);
             nap(1000);
@@ -1122,28 +1121,27 @@ quaffpotion(struct Object pot) {
 
     case OPWISDOM:
         say("You feel more self-confident!\n");
-        UU.wisdom += rnd(2);
+        wisdom_adjust(rnd(2));
         break;
 
     case OPSTRENGTH:
-        say("Wow!  You feel great!");
-        if (UU.strength<12) UU.strength=12;
-        else UU.strength++;
+        say("Wow!  You feel great!\n");
+        strength_adjust_min(1, 12);
         break;
 
     case OPCHARISMA:
         say("Aaaoooww!  You're looking good now!\n");
-        UU.charisma++;
+        charisma_adjust(1);
         break;
 
     case OPDIZZINESS:
         say("You become dizzy!\n");
-        if (--UU.strength < 3) UU.strength=3;
+        strength_adjust(-1);
         break;
 
     case OPLEARNING:
         say("You feel clever!\n");
-        UU.intelligence++;
+        intelligence_adjust(1);
         break;
 
     case OPGOLDDET:
@@ -1151,7 +1149,7 @@ quaffpotion(struct Object pot) {
         nap(2000);
         for (int y=0; y<MAXY; y++) {
             for (int x=0; x<MAXX; x++) {
-                if (Map[x][y].obj.type == OGOLDPILE) {
+                if (at(x, y)->obj.type == OGOLDPILE) {
                     see_and_update_at(x, y);
                 }
             }/* for */
@@ -1192,20 +1190,18 @@ quaffpotion(struct Object pot) {
 
     case OPHEROISM:
         say("WOW!  You feel fantastic!\n");
-        if (UU.hero==0) {
-            add_to_base_stats(11);
-        }/* if */
+        add_to_base_stats(1);    // You get one permanent boost!
         UU.hero += 250;
         break;
 
     case OPSTURDINESS:
         say("You feel healthier!\n");
-        UU.constitution++;
+        constitution_adjust(1);
         break;
 
     case OPGIANTSTR:
         say("You now have incredible bulging muscles!\n");
-        if (UU.giantstr==0) UU.strextra += 21;
+        strength_adjust(1);     // You get one permanent boost.
         UU.giantstr += 700;
         break;
 
@@ -1219,7 +1215,7 @@ quaffpotion(struct Object pot) {
         nap(2000);
         for (int y = 0; y<MAXY; y++) {
             for (int x = 0; x<MAXX; x++) {
-                int k = Map[x][y].obj.type;
+                int k = at(x, y)->obj.type;
                 if (k == ODIAMOND || k == ORUBY || k == OEMERALD ||
                     k == OSAPPHIRE || k == OLARNEYE || k == OGOLDPILE)
                 {
@@ -1231,6 +1227,7 @@ quaffpotion(struct Object pot) {
         return;
 
     case OPINSTHEAL:
+        say("You feel completely healthy.\n");
         UU.hp = UU.hpmax;
         removecurse();
         break;
@@ -1247,7 +1244,6 @@ quaffpotion(struct Object pot) {
     case OPSEEINVIS:
         say("You feel your vision sharpen.\n");
         UU.seeinvisible += rnd(1000)+400;
-        MonType[INVISIBLESTALKER].mapchar = 'I';
         return;
     };
 
@@ -1257,7 +1253,7 @@ quaffpotion(struct Object pot) {
 // function to process a magic scroll
 static void
 oscroll() {
-    struct Object scr = Map[UU.x][UU.y].obj;
+    struct Object scr = at(UU.x, UU.y)->obj;
     //const char *prmsg;
 
     ASSERT (isscroll(scr));
@@ -1305,8 +1301,7 @@ prompt2(const char *question) {
 static void
 ohear() {
     say("You have been heard!\n");
-    if (UU.altpro==0)
-        UU.moredefenses+=5;
+    defense_adjust(2);  // Two of the points are permanent.
     UU.altpro += 800;   /* protection field */
 }/* ohear*/
 
@@ -1340,10 +1335,11 @@ static void
 oaltar() {
     if (nearbymonst()) return;
 
-    char *pmsg = "There is a holy altar here. \nDo you (p) pray, "
-        "(m) donate, (d) desecrate, or (n) do nothing?";
+    say("There is holy alter here.\n");
 
-    switch(prompt2(pmsg)) {
+    char action = prompt2("Do you (p) pray, (m) donate, (d) desecrate, "
+                          "or (n) do nothing?");
+    switch(action) {
     case 'p': {
 
         // On very rare occasions, miracles can occur.
@@ -1445,7 +1441,7 @@ othrone() {
     if (nearbymonst()) return;
 
     roll       = rnd(101);
-    throne     = Map[UU.x][UU.y].obj;
+    throne     = at(UU.x, UU.y)->obj;
     gnome      = (throne.type == OTHRONE);
     deadthrone = (throne.type == ODEADTHRONE);
     prmsg      = deadthrone ?
@@ -1467,11 +1463,11 @@ othrone() {
             for (i=0; i<rnd(4); i++) {
                 creategem(); /*gems pop off the throne*/
             }
-            Map[UU.x][UU.y].obj = obj(ODEADTHRONE, 0);
+            at(UU.x, UU.y)->obj = obj(ODEADTHRONE, 0);
         }
         else if (gnome && roll < 40) {
             createmonster(GNOMEKING);
-            Map[UU.x][UU.y].obj = obj(OTHRONE2, 0);
+            at(UU.x, UU.y)->obj = obj(OTHRONE2, 0);
         }
         else {
             say("Nothing happens.\n");
@@ -1485,7 +1481,7 @@ othrone() {
         }
         else if (gnome && roll < 30) {
             createmonster(GNOMEKING);
-            Map[UU.x][UU.y].obj = obj(OTHRONE2, 0);
+            at(UU.x, UU.y)->obj = obj(OTHRONE2, 0);
         }
         else if (roll < teleMin) {
             say("Zaaaappp!  You've been teleported!\n\n");
@@ -1542,13 +1538,13 @@ ochest() {
                 headsup();
                 break;
             };
-            Map[UU.x][UU.y].obj = NULL_OBJ;
+            at(UU.x, UU.y)->obj = NULL_OBJ;
             if (rnd(100) < 69) {
                 creategem(); /* gems from the chest */
             }
-            dropgold(rnd(110*Map[UU.x][UU.y].obj.iarg+200));
+            dropgold(rnd(110*at(UU.x, UU.y)->obj.iarg+200));
             for (i=0; i<rnd(4); i++) {
-                create_rnd_item(UU.x, UU.y, Map[UU.x][UU.y].obj.iarg+2);
+                create_rnd_item(UU.x, UU.y, at(UU.x, UU.y)->obj.iarg+2);
             }
         }
         else say("Nothing happens.\n");
@@ -1612,7 +1608,7 @@ ofountain() {
         if (rnd(12)<3) {
             say("The fountains bubbling slowly quietens.\n");
             /* dead fountain */
-            Map[UU.x][UU.y].obj = obj(ODEADFOUNTAIN, 0);
+            at(UU.x, UU.y)->obj = obj(ODEADFOUNTAIN, 0);
         }
         break;
 
@@ -1650,27 +1646,27 @@ fntchange(int how) {
     switch(rnd(9)) {
     case 1:
         say("Your strength");
-        fch(how,&UU.strength);
+        fount_change(how,&UU.strength);
         break;
     case 2:
         say("Your intelligence");
-        fch(how,&UU.intelligence);
+        fount_change(how,&UU.intelligence);
         break;
     case 3:
         say("Your wisdom");
-        fch(how,&UU.wisdom);
+        fount_change(how,&UU.wisdom);
         break;
     case 4:
         say("Your constitution");
-        fch(how,&UU.constitution);
+        fount_change(how,&UU.constitution);
         break;
     case 5:
         say("Your dexterity");
-        fch(how,&UU.dexterity);
+        fount_change(how,&UU.dexterity);
         break;
     case 6:
         say("Your charm");
-        fch(how,&UU.charisma);
+        fount_change(how,&UU.charisma);
         break;
     case 7:
         j=rnd(getlevel()+1);
@@ -1714,19 +1710,16 @@ fntchange(int how) {
  *  process an up/down of a character attribute for ofountain
  */
 static void
-fch(int how, long *x) {
-    if (how < 0 )    {
-        if (*x > 3) {
-            say(" went down by one!\n");
-            --(*x);
-        } else
-            say(" remained unchanged!\n");
+fount_change(int how, struct Stat *x) {
+    uint16_t prev = stat_val(x);
+
+    stat_adjust(x, how < 0 ? -1 : 1);
+    if (stat_val(x) == prev) {
+        say(" remained unchanged!\n");
+    } else {
+        say(" went %s by one!\n", stat_val(x) < prev ? "down" : "up");
     }
-    else {
-        say(" went up by one!\n");
-        (*x)++;
-    }
-}/* fch*/
+}/* fount_change*/
 
 
 // You've stepped on a Sphere of Annihilation.  Ooops.
@@ -1755,7 +1748,7 @@ opit() {
         return;    // You got lucky
     }
 
-    if (rnd(70) > 9 * UU.dexterity - packweight() || rnd(101) < 5) {
+    if (rnd(70) > 9 * dexterity() - packweight() || rnd(101) < 5) {
         if (has_a(OWWAND)) {
             say("You float right over the pit.\n");
             return;
@@ -1779,7 +1772,7 @@ opit() {
             losehp(i, DDPIT);
             nap(2000);
 
-            setlevel(getlevel()+1);
+            setlevel(getlevel()+1, true);
             update_display();
         }// if .. else
     }// if
@@ -1797,7 +1790,7 @@ obottomless() {
 
 static void
 oelevator() {
-    struct Object obj = Map[UU.x][UU.y].obj;
+    struct Object obj = at(UU.x, UU.y)->obj;
     int level, newlevel;
 
     ASSERT(obj.type == OELEVATORUP || obj.type == OELEVATORDOWN);
@@ -1828,7 +1821,10 @@ oelevator() {
     UU.x = rnd(MAXX-2);
     UU.y = rnd(MAXY-2);
     nap(2000);
-    setlevel(newlevel);
+    setlevel(newlevel, false);
+
+    // The elevator tells you what level you're on
+    lev()->known = true;
 
     positionplayer();
 
@@ -1852,7 +1848,7 @@ obook() {
 
     case 'g':
         say("read.\n");
-        readbook(Map[UU.x][UU.y].obj.iarg);
+        readbook(at(UU.x, UU.y)->obj.iarg);
         udelobj();            /* no more book */
         break;
 

@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "object.h"
@@ -11,10 +11,12 @@
 #include "fortune.h"
 #include "action.h"
 #include "look.h"
+#include "player.h"
+#include "ui.h"
 
 
 // Master list of object types:
-struct ObjType Types[] = {
+const struct ObjType Types[] = {
 #define OBJECT(id, sym, mprice, mqty, mrust, weight, mod, mflags, mpdesc, mdesc) \
     {mpdesc mdesc, mdesc, sym, mprice, mqty, mrust, weight, mod, mflags,         \
      !((mflags) & (OA_SCROLL|OA_POTION))},
@@ -25,87 +27,6 @@ struct ObjType Types[] = {
 
 static void extendspells (void);
 
-
-/* Return the flags of the type of obj. */
-static unsigned long
-objflags(struct Object obj) {
-    ASSERT(obj.type < OBJ_COUNT);
-    return Types[obj.type].flags;
-}/* objflags*/
-
-
-/* Test if object 'obj' is a potion. */
-bool
-ispotion(struct Object obj) {
-    return !! (OA_POTION & objflags(obj));
-}/* ispotion*/
-
-/* Test if 'obj' is a drug. */
-bool
-isdrug(struct Object obj) {
-    return !! (OA_DRUG & objflags(obj));
-}/* ispotion*/
-
-
-/* Test if object 'obj' is a scroll. */
-bool
-isscroll(struct Object obj) {
-    return !! (OA_SCROLL & objflags(obj));
-}/* isscroll*/
-
-/* Test if object 'obj' is readable. */
-bool
-isreadable(struct Object obj) {
-    ASSERT (obj.type < OBJ_COUNT);
-    return !! (OA_READABLE & objflags(obj));
-}/* isscroll*/
-
-
-/* Test if object 'obj' is identified. */
-bool
-isknown(struct Object obj) {
-    return Types[obj.type].isKnown;
-}/* isknown*/
-
-/* Test if object 'obj' is a gem. */
-bool
-isgem(struct Object obj) {
-    return !!(OA_GEM & objflags(obj));
-}/* isgem*/
-
-/* Test if obj can be bought in the store. */
-bool
-issellable(struct Object obj) {
-    return !!(OA_CANSELL & objflags(obj));
-}
-
-bool
-iswieldable(struct Object obj) {
-    return !!(OA_WIELDABLE & objflags(obj));
-}/* iswieldable*/
-
-bool
-iswearable(struct Object obj) {
-    return !!(OA_WEARABLE & objflags(obj));
-}/* iswieldable*/
-
-/* Test if obj is the null object. */
-bool
-isnone(struct Object obj) {
-    return obj.type == ONONE;
-}/* isnone*/
-
-/* Test if this is something a leprechaun would want to steal. */
-bool
-isshiny(struct Object obj) {
-    return isgem(obj) || obj.type == OGOLDPILE;
-}/* isshiny*/
-
-/* Test if this object blocks line-of-sight. */
-bool
-isopaque(struct Object obj) {
-    return obj.type == OWALL || obj.type == OCLOSEDDOOR;
-}/* isshiny*/
 
 
 /* Return the price the bank would give you for this piece. */
@@ -133,11 +54,13 @@ longobjname (struct Object obj) {
     ASSERT (obj.type < OBJ_COUNT);
 
     if (obj.type == OGOLDPILE) {
-        sprintf (desc, "%u gold pieces", (unsigned)obj.iarg);
-    } else if ( (Types[obj.type].flags & (OA_WIELDABLE|OA_WEARABLE)) && obj.iarg != 0) {
-        sprintf (desc, "%s %+d", objname(obj), (int)obj.iarg);
+        sprintf(desc, "%u gold pieces", (unsigned)obj.iarg);
+    } else if ( (Types[obj.type].flags & (OA_WIELDABLE|OA_WEARABLE))
+                && obj.iarg != 0)
+    {
+        sprintf(desc, "%s %+d", objname(obj), (int)obj.iarg);
     } else {
-        strncpy (desc, objname(obj), sizeof(desc));
+        strncpy(desc, objname(obj), sizeof(desc));
     }/* if .. else*/
 
     return desc;
@@ -160,7 +83,7 @@ shortobjname(struct Object obj) {
 /* Return the name of obj as best as is known by the player. */
 const char *
 knownobjname(struct Object obj) {
-    if (isknown(obj)) return objname(obj);
+    if (knows_obj(obj.type)) return objname(obj);
 
     if (ispotion(obj)) return "a magic potion";
     if (isscroll(obj)) return "a magic scroll";
@@ -231,7 +154,7 @@ read_scroll(struct Object scr) {
 
     ASSERT (isscroll(scr));
 
-    Types[typ].isKnown = true;   /* Reading identifies the scroll. */
+    identify(typ);   /* Reading identifies the scroll. */
 
     say("You read a scroll of %s.\n", shortobjname(scr));
 
@@ -280,7 +203,7 @@ read_scroll(struct Object scr) {
         say("You go %sward in time by %d mobul%s\n", (i<0)?"back":"for",
                 (i<0)?-i:i, i==1?"":"s");
 
-        adjusttime((long)(i * MOBUL));/* adjust time for time warping */
+        adjust_effect_timeouts((long)(i * MOBUL), false); /* adjust time for time warping */
         return;
 
     case OSTELEPORT:
@@ -293,18 +216,12 @@ read_scroll(struct Object scr) {
 
     case OSHASTEMONST:
         UU.hastemonst += rnd(55)+12;
-        say("You feel nervous.");
+        say("You feel nervous.\n");
         return;
 
     case OSMONSTHEAL:
-        for (i=0; i<MAXY; i++) {
-            for (j=0; j<MAXX; j++) {
-                uint8_t id = Map[j][i].mon.id;
-                if (id) { Map[j][i].mon.hitp = mon_hp(id); }
-            }// for
-        }// for
-
-        say("You feel uneasy.");
+        heal_monsters();
+        say("You feel uneasy.\n");
         return;
 
     case OSSPIRITPROT:
@@ -351,7 +268,7 @@ read_scroll(struct Object scr) {
 
     case OSIDENTIFY:
         for (i = 0; i < IVENSIZE; i++) {
-            Types[Invent[i].type].isKnown = true;
+            identify(Invent[i].type);
         }/* for */
         break;
 
@@ -379,10 +296,9 @@ read_scroll(struct Object scr) {
 void
 removecurse () {
     int i;
-    static long *curse[] = {
+    static int32_t *curse[] = {
         &UU.blindCount, &UU.confuse, &UU.aggravate, &UU.hastemonst,
-        &UU.itching, &UU.drainstrength, &UU.clumsiness,
-        &UU.infeeblement, &UU.halfdam,
+        &UU.itching, &UU.clumsiness, &UU.halfdam,
         NULL
     };
 
@@ -396,7 +312,7 @@ removecurse () {
 static void
 extendspells () {
     int i;
-    static long *exten[] = {
+    static int32_t *exten[] = {
         &UU.protectionTime, &UU.dexCount, &UU.strcount, &UU.charmcount,
         &UU.invisibility, &UU.cancellation, &UU.hasteSelf, &UU.globe,
         &UU.scaremonst, &UU.holdmonst, &UU.timestop,
@@ -432,13 +348,13 @@ readbook(int booklev) {
         spell = rnd( (lev != 0) ? lev : 1 ) + 9;
     }/* if .. else*/
 
-    GS.spellknow[spell] = true;
+    UU.spellknow[spell] = true;
     say("Spell \"%s\":  %s\n%s.\n",
         Spells[spell].code, Spells[spell].name, Spells[spell].desc);
 
     if (rnd(10)==4) {
         say("You feel more educated!\n");
-        UU.intelligence++;
+        intelligence_adjust(1);
     }/* if */
 }/* readbook*/
 
@@ -453,7 +369,7 @@ closedoor() {
     /* can't find objects is time is stopped*/
     if (UU.timestop)  return;
 
-    int i = Map[UU.x][UU.y].obj.type;
+    int i = at(UU.x, UU.y)->obj.type;
     if (i != OOPENDOOR) {
         say("There is no open door here.\n");
         return;
@@ -461,7 +377,7 @@ closedoor() {
     
     say("The door closes.\n");
     udelobj();
-    Map[UU.x][UU.y].obj = obj(OCLOSEDDOOR, 0);
+    at(UU.x, UU.y)->obj = obj(OCLOSEDDOOR, 0);
     cancel_look(); /* So we won't be asked to open it */
 }/* closedoor*/
 

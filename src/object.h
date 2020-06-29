@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2019; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // Code for creating and managing in-game objects (i.e. weapons,
@@ -6,6 +6,8 @@
 
 #ifndef HDR_GUARD_OBJECT_H
 #define HDR_GUARD_OBJECT_H
+
+#include "internal_assert.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -40,6 +42,7 @@ enum OBJECT_ATTR {
     OA_CHARM        = 0x200,    /* Intended to be carried. */
     OA_BANKBUYS     = 0x400,    /* Can be sold to the bank. */
     OA_DRUG         = 0x800,    /* Sold exclusively by Dealer McDope. */
+    OA_CANRUST      = 0x1000,   /* Can be rusted to -10 and destroyed. */
 };
 
 /* The list of object IDs. */
@@ -94,9 +97,9 @@ struct ObjType {
     int weight;
     int mod;
     unsigned long flags;
-    bool isKnown;
+    bool isKnownByDefault;
 };
-extern struct ObjType Types[];
+extern const struct ObjType Types[];
 
 struct Object obj(enum OBJECT_ID id, unsigned arg);
 struct Object door(enum DOORTRAP_RISK risk);
@@ -109,18 +112,6 @@ const char *knownobjname(struct Object obj);
 int storesellvalue(struct Object obj);
 int banksellvalue(struct Object obj);
 
-bool ispotion(struct Object obj);
-bool isdrug(struct Object obj);
-bool isscroll(struct Object obj);
-bool isknown(struct Object obj);
-bool isgem(struct Object obj);
-bool issellable(struct Object obj);
-bool isreadable(struct Object obj);
-bool iswieldable(struct Object obj);
-bool iswearable(struct Object obj);
-bool isnone(struct Object obj);
-bool isshiny(struct Object obj);
-bool isopaque(struct Object obj);
 
 void quaffpotion(struct Object pot);
 void read_scroll(struct Object scr);
@@ -131,5 +122,72 @@ void ignore(void);
 void closedoor(void);
 struct Object newobject(int lev);
 void show_cookie(void);
+
+
+// Return the flags of the type of obj.
+static inline unsigned long objflags(struct Object obj) {
+    ASSERT(obj.type < OBJ_COUNT);
+    return Types[obj.type].flags;
+}
+
+static inline bool ispotion(struct Object obj) {
+    return !! (OA_POTION & objflags(obj));
+}
+
+// Test if 'obj' is a drug (from Dealer McDope).
+static inline bool isdrug(struct Object obj) {
+    return !! (OA_DRUG & objflags(obj));
+}
+
+
+static inline bool isscroll(struct Object obj) {
+    return !! (OA_SCROLL & objflags(obj));
+}
+
+// Test if object can be read like a book (or scroll)
+static inline bool isreadable(struct Object obj) {
+    ASSERT (obj.type < OBJ_COUNT);
+    return !! (OA_READABLE & objflags(obj));
+}
+
+static inline bool isgem(struct Object obj) {
+    return !!(OA_GEM & objflags(obj));
+}
+
+// Test if obj can be bought in the store.
+static inline bool issellable(struct Object obj) {
+    return !!(OA_CANSELL & objflags(obj));
+}
+
+static inline bool iswieldable(struct Object obj) {
+    return !!(OA_WIELDABLE & objflags(obj));
+}
+
+static inline bool iswearable(struct Object obj) {
+    return !!(OA_WEARABLE & objflags(obj));
+}
+
+// Test if obj is the null object.
+static inline bool isnone(struct Object obj) {
+    return obj.type == ONONE;
+}
+
+// Test if this is something a leprechaun would want to steal.
+static inline bool isshiny(struct Object obj) {
+    return isgem(obj) || obj.type == OGOLDPILE;
+}
+
+// Test if this object blocks line-of-sight.
+static inline bool isopaque(struct Object obj) {
+    return obj.type == OWALL || obj.type == OCLOSEDDOOR;
+}
+
+
+// Test if the object can be dulled below 0.
+static inline bool canrust(struct Object obj) {
+    return !! (OA_CANRUST & objflags(obj));
+}
+
+
 
 #endif
