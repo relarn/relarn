@@ -309,7 +309,7 @@ dbg_select() {
         {DC_TELEPORT,   "Teleport to a different level."},
         {DC_LEVELUP,    "Gain one level."},
         {DC_DIAG,       "Write out a diag file."},
-        {DC_MAIL,       "Create and read the junk mail."},
+        {DC_MAIL,       "Create the junk mail."},
         {DC_NOTHING,    "Do nothing."},
         {0, NULL},
     };

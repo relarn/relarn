@@ -262,16 +262,20 @@ readopts (const char *opts_file) {
             continue;
         }// if
 
-        if (opt(line, "email-client:", &arg) && !gui_client_set) {
-            strncpy(GameSettings.emailClient, arg,
-                    sizeof(GameSettings.emailClient) - 1);
+        if (opt(line, "email-client:", &arg)) {
+            if(!gui_client_set) {
+                strncpy(GameSettings.emailClient, arg,
+                        sizeof(GameSettings.emailClient) - 1);
+            }
             continue;
         }// if
 
-        if (opt(line, "gui-email-client:", &arg) && !is_tty() ) {
-            strncpy(GameSettings.emailClient, arg,
-                    sizeof(GameSettings.emailClient) - 1);
-            gui_client_set = true;
+        if (opt(line, "gui-email-client:", &arg)) {
+            if(!is_tty()) {
+                strncpy(GameSettings.emailClient, arg,
+                        sizeof(GameSettings.emailClient) - 1);
+                gui_client_set = true;
+            }
             continue;
         }// if
 
