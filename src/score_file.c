@@ -204,9 +204,9 @@ newscore(long score, bool won, int level, const char *ending,
          const struct Player *uu) {
     struct ScoreBoardEntry sb;
 
-    zstrncpy(sb.uid, get_user_id(), OS_UID_STR_MAX);
-    zstrncpy(sb.who, uu->name, sizeof(sb.who));
-    zstrncpy(sb.cclass, ccname(uu->cclass), sizeof(sb.cclass));
+    strncpy(sb.uid, get_user_id(), OS_UID_STR_MAX);
+    strncpy(sb.who, uu->name, sizeof(sb.who));
+    strncpy(sb.cclass, ccname(uu->cclass), sizeof(sb.cclass));
     sb.gender = uu->gender;
     sb.won = won;
     sb.score = score;
@@ -214,10 +214,17 @@ newscore(long score, bool won, int level, const char *ending,
     sb.challenge = uu->challenge;
     sb.level = level;
     sb.exp_level = uu->level;
-    zstrncpy(sb.ending, ending, sizeof(sb.ending));
+    strncpy(sb.ending, ending, sizeof(sb.ending));
+
+    // strncpy doesn't null-terminate if the source is longer than the
+    // maximum.
+    sb.who[sizeof(sb.who) - 1] = 0;
+    sb.cclass[sizeof(sb.cclass) - 1] = 0;
+    sb.ending[sizeof(sb.ending) - 1] = 0;
 
     // Sanitize the strings
     sanitize(&sb);
+
 
     FILE *fh = fopen(scoreboard_path(), "ab");
     if (!fh) { return false; }
@@ -268,17 +275,18 @@ showscores(bool all) {
     size_t len = 0;
     struct ScoreBoardEntry *items = load_scorefile(&len);
 
+    if (!items) {
+        tb_append(dest, "\n\n\n");
+        tb_append(dest,
+                  len == 0 ? "No scores yet." : "Score file is corrupt!");
+        return;
+    }// if
+
     // Heading
     snprintf(buffer, sizeof(buffer),
              "%-9s %-5s %-9s %-3s %-5s\n",
              "Score", "", "Challenge", "Floor", "Level");
     tb_append(dest, buffer);
-
-    if (!items && len > 0) {
-        tb_append(dest, "\n");
-        tb_append(dest, "    *** Error reading score file ***");
-        len = 0;
-    }
 
     size_t n;
     for (n = 0; n < len; n++) {

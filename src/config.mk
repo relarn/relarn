@@ -2,6 +2,12 @@
 # Build configuration file.  In theory, this is the only file you need
 # to edit.
 
+# Absolute path to the installation directory. This also gets
+# hardcoded in the executable but may be overridden by the launch
+# script.
+INST_ROOT = $(HOME)/apps/relarn-$(RELARN_VERSION).$(RELARN_PATCHLEVEL)
+#INST_ROOT = /usr/local/games/relarn-$(RELARN_VERSION).$(RELARN_PATCHLEVEL)
+
 # Comment out this line to enable assertions.  You only want to do
 # this if you're developing or debugging.
 #ASSERT_CFLAGS = -DDISABLE_ASSERT=1

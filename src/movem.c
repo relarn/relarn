@@ -536,7 +536,7 @@ checkpointy(int xdest, int ydest) {
     const char *who, *what;
 
     if (!ismon(mon)) return;
-    if (dob.type != OTRAPARROW && dob.type != ODARTRAP) return;
+    if (dob.type != OTRAPARROW || dob.type != ODARTRAP) return;
 
     if (dob.type == OTRAPARROW) {
         who = "An arrow";
@@ -546,15 +546,14 @@ checkpointy(int xdest, int ydest) {
         mon.hitp -= rnd(6);
     }/* if .. else*/
 
-    struct Monster new_mon = NULL_MON;
     if (mon.hitp <= 0) {
-        what = "%s hits and kills the %s.\n";
-    } else {
-        new_mon = mon;
+        mon = NULL_MON;
         what = "%s hits the %s.\n";
+    } else {
+        what = "%s hits and kills the %s.\n";
     }/* if .. else*/
 
-    at(xdest, ydest)->mon = new_mon;
+    at(xdest, ydest)->mon = mon;
 
     /* Print the message. */
     if (!UU.blindCount) {

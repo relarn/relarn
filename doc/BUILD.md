@@ -12,7 +12,8 @@ The native Windows version requires MSYS and MINGW; I use
 
 The macOS app uses only command-line tools, scripts and trickery.
 
-## Requirements
+
+## Overview
 
 To build basic ReLarn, you will need:
 
@@ -24,202 +25,217 @@ To build basic ReLarn, you will need:
   (optional; `pod2html` is used to generate the man page).  On
   Windows, MSYS is sufficient
 
-To build the graphical version of ReLarn, you will also need
+To build the windowed version of ReLarn, you will also need
 
-* PDCurses 3.8 (cloned [here](https://gitlab.com/relarn/relarn-pdcurses.git)
-  for your convenience) instead of ncurses.
+* PDCurses 3.8 (cloned [here](https://gitlab.com/relarn/relarn-pdcurses.git) 
+  for your convenience.)
 * SDL 2.0.5 and libsdl2_ttf and all their dependencies
 
-
-## Quick Start
-
-Note that this builds the TTY (i.e. console-mode) version only.  The
-graphical version (required for (e.g.) non-Cygwin Windows) is more
-involved.  See below.
-
-1. Install the requirements.  If you have trouble finding them, I may
-   have some hints below.
-
-2. Run make:
-```sh
-    cd src
-    make tarball
-```
-
-3. Extract the resulting tarball somewhere:
-```sh
-    cd ~/my_games
-    tar xvf <path-to-relarn>/src/relarn-*.tar.gz
-```
-
-4. Create a symlink from `bin/relarn` to somewhere in your path:
-```sh
-    ln -s ~/my_games/relarn-<version>/bin/relarn ~/my_games/bin
-```
-   (This is optional; you could also add the install directory to your
-   path if you want.)
-
-If you want to do the classic Unix thing and install it globally in a
-system directory such as `/usr/local`, you can also do that:
-
-```sh
-    cd src
-    make RELEASE=y INST_ROOT=/usr/local install
-```
-
-However, I've had better luck doing the tarball thing and just
-extracting it somewhere globally accessible on the machine.
-
-
-## Makefile configuration
+And you can skip ncurses in this case.
 
 The Makefile accepts three arguments:
 
-* `INST_ROOT` is the place to install the game.  `tarball` works by
-  setting it to a local directory that it then archives.
-* `RELEASE` is a flag; when set to "y" (or any other non-empty
-  string), compiles for release instead of development.
-* `PDCURSES` is the path to an SDL-enabled PDCurses build.  If
-  present, make will build the graphical version of relarn.
+* `INST_ROOT` is the place to install the game.  Defaults 
+   to `~/apps/relarn-<version>/`.
+* `RELEASE` should be `yes`; disables certain overcautious
+  compile-time errors.
+* `PDCURSES` is the path to your PDCurses build if you wish to build
+  the windowed version; otherwise, it should be left out.
 
-Invoking `make` with no arguments will produce a debug build in the
-`src` directory.  This can be run in place for debugging.
+These are typically set on the `make` command line.
 
-The relevant `make` targets are:
+You may also want to look at
+[this project](https://gitlab.com/relarn/relarn-ci-build).  It
+contains scripts that will build ReLarn from sources in Gitlab's CI
+environment and so may be a useful reference.
 
-* `make install` builds the game and installes at at `INST_ROOT`
+    
+## Building the TTY version on Linux
 
-* `make install_dist` is like `make install` but also installs binary
-  dependencies with the expectation that you'll want to zip or tar the
-  directory run it elsewhere.
+To build on Linux, first install the dependencies as outlined above.
+On my reference system (Ubuntu 18LTS), it's a simple matter of typing:
 
-* `make tarball` does `make install_dist` and produces a tar archive
-  for you with a meaningful name.
+    sudo apt-get install libncurses-dev gcc make perl
 
-* `make app` on macOS will (try to) build ReLarn.app
+At this point, you just run make in `src` with the appropriate
+parameters:
 
-* `make all/clean/tags/et. al.` do the usual expected things.
+    cd relarn/src
+    make RELEASE=yes INST_ROOT=~/my_apps/relarn-2.2.0
+    make RELEASE=yes INST_ROOT=~/my_apps/relarn-2.2.0 install
+
+This will install relarn in directory `~/my_apps/relarn-2.2.0`.
+
+If you want to do the standard Unix thing and put it in a system
+location, you can do that too:
+
+    cd relarn/src
+    make RELEASE=yes INST_ROOT=/usr/local/games
+    sudo make RELEASE=yes INST_ROOT=/usr/local/games install
+
+Note that different major versions of ReLarn aren't savefile
+compatible, so upgrading in this way will make it impossible to finish
+your current game.  You can work around this by installing them in
+separate versioned subdirectories and making symlinks to the relevant
+`bin` directory if that's an issue.
 
 
+## Building the SDL version on Linux
 
-## Building the Graphical Version
+Building the SDL version on Linux requires most of the same
+dependencies as the TTY version (minus ncurses) plus SDL and SDL_ttf:
 
-ReLarn can run on systems without a proper terminal emulator by using
-PDCurses and its interface to SDL.  (That's right, PDCurses can work
-on a framebuffer!)  We use the SDL 2.x target with TrueType font
-support for this.
+    apt install libsdl2-dev libsdl2-ttf-dev
 
-Building it is pretty straightforward:
+(I also had to explicitly install `libglu1-mesa-dev` but I think
+that's due to a packaging bug.)
 
-First, clone the repo.  I use my copy for security but it's no
-different from the upstream.
+Once those are installed, you will need to build PDCurses.  I use the
+copy I made (linked above):
 
     git clone https://gitlab.com/relarn/relarn-pdcurses.git
 
-Also install the SDL dependencies (SDL2 and the TrueType font
-extension) if you haven't already.  On Ubuntu, this is:
-
-    sudo apt install libsdl2-dev libsdl2-ttf-dev
-
-The PDCurses source tree has a subdirectory for each backend target.
-You just `cd` into the correct one and run make.  In our case, we also
-need to specify wide characters with the option `WIDE=Y`:
+Once it's checkout out, build the sdl2 interface with TrueType fonts
+enabled:
 
     cd relarn-pdcurses/sdl2
     make WIDE=Y
+    cd ../..
 
-Then, you simply need to build `relarn` with argument `PDCURSES`
-pointing to the the checked-out PDCurses source tree:
+Now, you can build ReLarn:
 
-    make PDCURSES=<path>/relarn-pdcurses tarball
+    cd relarn/src
+    make clean      # Only needed if there was a previous build.
+    make PDCURSES=../../relarn-pdcurses/ \
+         RELEASE=yes \
+         INST_ROOT=~/my_apps/relarn-2.2.0 \
+         install
 
-That works pretty much universally but requires MSYS (or equivalent)
-on Windows.
+Building a binary release is done in mostly the same way but you
+should build target `install_dist`.  You will also need to tar and/or zip
+the installation directory yourself.  Example:
 
+    cd relarn/src
+    make clean      # Only needed if there was a previous build.
+    mkdir relarn-2.2.0
+    make PDCURSES=../../relarn-pdcurses/ \
+         RELEASE=yes \
+         INST_ROOT=relarn-2.2.0 \
+         install_dist
+    tar cvf relarn-2.2.0.tar relarn-2.2.0/
+    gzip -9 relarn-2.2.0.tar
 
-
-
-
-## Platform-specific Hints
-
-### Ubuntu Linux
-
-As of this writing (Ubuntu 20.04LTS), you can install all of the
-necessary dependencies with:
-
-    sudo apt-get install libncurses-dev gcc make perl \
-        libsdl2-dev libsdl2-ttf-dev
-
-(You can skip the last two if you only want to build the text-mode
-game.)
-
-Given the variance in Linux packaging systems, your mileage will vary
-across versions and distros.  Then again, these are all really stable
-packages so this or your distro's equivalent may well Just Work.
+Using `install_dist` instead of `install` is not strictly necessary on
+Linux but makes a difference on Windows and macOS.
 
 
-### macOS
+## Building for macOS
 
-macOS is Just A Unix and `make tarball` et. al. should just work as
-expected.  I used Xcode's command-line tools to compile and link it
-and got `sdl2` and `sdl2_ttf` from Brew.
+Building on macOS is mostly the same as Linux. You will need to
+install Xcode and the command-line utilities.  The other dependencies
+are all available on MacPorts and (I assume) Brew.  After that, just
+follow the steps outlined above.
 
-Unlike on Linux, the tarballs will also include the necessary
-`*.dylib` files needed to redistribute the game.  These are gathered
-by the script `build_helpers/fetch_osx_dylibs.sh`, which may or may
-not work correctly.  (Unfortunately, I macOS makes it difficult to
-affordably set up clean build or test environments, so "works on my
-machine" is the best I can offer.)
+Note that it is important to use `make install_dist` when creating a
+redistributable build because that will find and include the necessary
+shared libraries.
 
-There is also (experimental!) support for producing a macOS App for
-the graphical build, via the "app" target:
+(If you don't want to install Xcode, you can probably get what you
+need from MacPorts or Brew but I haven't tried it that way.)
 
-    make PDCURSES=<path>/relarn-pdcurses app
+You can also build ReLarn as an App bundle and package it in a dmg
+file.
 
-This will create a directory named `ReLarn.app` in `src/`.  As above,
-all I can promise is that it works on my machine.
+    make PDCURSES=../../relarn-pdcurses/ \
+         RELEASE=yes \
+         app
+
+or
+
+    make PDCURSES=../../relarn-pdcurses/ \
+         RELEASE=yes \
+         dmg
+
+(`make dmg` implies `make app`.)
+
+Note that this is **EXPERIMENTAL** and may well not play nice with
+Apple's app validation stuff.
+
+(Actually, the Mac stuff is generally harder to validate because
+there's no easy and cheap way to create a clean environment.  For
+Linux, there's Docker and Windows runs easily enough in VirtualBox but
+getting a fresh macOS install up and running just to do a clean build
+or a test run is way more work and expense than I'm willing to do
+unpaid.  So even though my principle development machine right now is
+a MacBook, this platform is going to get the worst support, just
+because "works on my machine" is the best validation I can do.)
 
 
-### Windows
 
-Windows is just a huge headache.  I mean in general, but also for this
-project.
+## Building for Microsoft Windows
 
-Its terminal doesn't really support ncurses so I can only support the
-graphical builds, and its scripting capabilities are so abysmal that I
-ended up writing a Windows-specific launcher in C.
-
-My preferred toolchain is MinGW on [MSYS2](https://www.msys2.org/).
+On Windows, I build with [MSYS2](https://www.msys2.org/) using gcc.
 Since there are several variants of MSYS out there with different
 levels of support, you may need to tweak your `config.mk` (see
-below).  Nevertheless, here's what worked for me:
+below).  Nevertheless, here's what works for me:
 
-1. I installed MSYS2 with [Chocolatey](https://chocolatey.org/):
-```sh
+Firstly, I installed MSYS2.  If you have
+[Chocolatey](https://chocolatey.org/) installed, it's as easy as:
+
     choco install -y msys2
-```
 
-2. In an MSYS session, I used pacman to install all of the tools and libraries.
-```sh
+but you can also just install it the old-fashioned way.
+
+Once MSYS2 is installed, open the console and install the
+dependencies:
+
     pacman --noconfirm -S \
        mingw-w64-i686-gcc make git perl perl-modules zip unzip \
        mingw-w64-i686-ncurses mingw-w64-i686-SDL2 mingw-w64-i686-SDL2_ttf \
        gcc tar gzip
-```
-    I also had to add them to my `PATH`.
 
-3. After that, it was just a simple matter checking out the source
-   code and building it, as usual.
-```sh
+After this, you need to add the 32-bit tools to the path (along with
+core_perl for some reason):
+
+    export PATH="/mingw32/bin:/usr/bin/core_perl/:$PATH"
+
+Once that's done, you can checkout `relarn` and `relarn-pdcurses` and
+build them in the usual way:
+
     cd relarn-pdcurses/sdl2
     make WIDE=Y
     cd ../../relarn/src
     make \
         PDCURSES=../../relarn-pdcurses/ \
-        tarball
-```
+        INST_ROOT=my_install_dir \
+        install
 
-As with `macOS`, part of `make tarball` is fetching all of the
-necessary DLLs so that it will work.  Unlike on `macOS`, I have
-**some** confidence that it will work on computers I don't own.
+As above, you should make target `install_dist` if you are compiling
+for binary redestribution.
 
+Note that the native Windows version **does not support TTY mode**.
+It will **always** open its own window.
+
+
+### Other Platforms (and/or Fixing Stuff)
+
+I have also managed to occasionally get ReLarn built on Raspbian and
+Cygwin.  In both cases, the usual *nix build procedure works
+reasonably well.  If not, it usually comes down to just editing
+`src/config.mk` and/or `build_helpers/platform-id.sh`.
+
+`platform-id.sh` is a simple `bash` script that prints out a string
+identifying your OS and CPU architecture (think GNU `config.guess` but
+not as good).  This gets called by `make` in the file `src/config.mk`
+which the `Makefile` includes.
+
+`config.mk` is mostly just a giant `ifeq ... else ifeq` block that
+sets the necessary variables (command-line options, etc) for each
+flag.
+
+If you want to add support for a new platform, simply add it to
+`platform-id.sh` and `config.mk` and there you go.
+
+(If you just want to PLAY THE STUPID GAME, you could just delete most
+config.mk minus the closest set of variables that work and then tweak
+those 'til the game compiles.  But you knew that already, right?)

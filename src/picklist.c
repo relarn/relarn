@@ -44,7 +44,7 @@ pl_add(struct PickList *pl, int id, char letter, const char *desc) {
     ndx = pl->num_elems;
     pl->items[ndx].id = id;
     pl->items[ndx].letter = letter;
-    zstrncpy (pl->items[ndx].description, desc, DESC_MAX);
+    strncpy (pl->items[ndx].description, desc, DESC_MAX);
 
     ++pl->num_elems;
 }/* pl_add*/

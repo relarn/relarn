@@ -6,4 +6,4 @@
 # Note that PATCHLEVEL changes should not break savefile
 # compatibility.
 RELARN_VERSION=2.2
-RELARN_PATCHLEVEL=2
+RELARN_PATCHLEVEL=1

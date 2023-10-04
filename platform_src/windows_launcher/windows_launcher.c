@@ -35,7 +35,7 @@ getNameAndRoot(char *name, char *root) {
 
     // Recover the name
     strncpy(name, namePtr, MAX_PATH);
-
+    
     // We know the path will end with 'bin/' so we drop that.  We
     // actually walk back to the previous slash because that makes
     // this easier to test.
@@ -45,7 +45,7 @@ getNameAndRoot(char *name, char *root) {
         if (pathEnd <= exepath) { goto failure; }
     }
     *pathEnd = 0;
-
+    
     // And then that's the path.
     strncpy(root, exepath, MAX_PATH);
 
@@ -56,7 +56,7 @@ failure:
     MessageBoxA(NULL,
                 "Can't find ReLarn installation. "
                 "Maybe move it somewhere near c:\\?",
-
+                
                 "Error!", MB_OK | MB_ICONERROR);
     exit(1);
 }// getNameAndRoot
@@ -66,7 +66,7 @@ static void
 downcase(char *str) {
     for (int n = 0; str[n]; n++) {
         str[n] = tolower(str[n]);
-    }// for
+    }// for 
 }// downcase
 
 
@@ -98,6 +98,6 @@ main(int argc, char *argv[]) {
                     "Err0r", MB_OK | MB_ICONERROR);
     }// if .. else
 
-
+    
     return 0;
 }

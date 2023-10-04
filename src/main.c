@@ -65,11 +65,11 @@ parse_args(int argc, char *argv[]) {
 
         case 's':
             only_show_scores = true;
-            only_show_winners = true;
             break;
 
         case 'i':
             only_show_scores = true;
+            only_show_winners = true;
             break;
 
         case 'w':
@@ -85,7 +85,7 @@ parse_args(int argc, char *argv[]) {
             break;
 
         case 'f':
-            zstrncpy(GameSettings.fontPath, optarg,
+            strncpy(GameSettings.fontPath, optarg,
                     sizeof(GameSettings.fontPath));
             break;
 

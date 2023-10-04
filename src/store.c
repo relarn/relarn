@@ -258,7 +258,7 @@ confirm_full_sale(int count, int forsale[], enum PRICEMODE pm) {
     int total = 0;
     int lastPageTop = 0;
     for (int n = 0; n < count; n++) {
-        const char *line = inv_line(forsale[n], pm);
+        const char *line = inv_line(forsale[n], PRM_STORE);
         tb_append(invoice, "    ");
         tb_append(invoice, line);
         tb_append(invoice, "\n");

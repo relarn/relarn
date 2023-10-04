@@ -7,7 +7,6 @@
 #define HDR_GUARD_UTIL_H
 
 #include "os.h"
-#include "internal_assert.h"
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -78,15 +77,6 @@ static inline bool streq(const char *s1, const char *s2) {
     if (s1 == s2) { return true; }
     if (s1 == NULL || s2 == NULL) { return false; }
     return strcmp(s1, s2) == 0;
-}
-
-// Wraps strncpy but ensures that dest is always null-terminated,
-// overwriting the last copied character if necessary.
-static inline char* zstrncpy(char *dest, const char *src, size_t max) {
-    ASSERT(max > 0);
-    char* result = strncpy(dest, src, max);
-    result[max - 1] = 0;
-    return result;
 }
 
 

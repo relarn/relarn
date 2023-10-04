@@ -14,14 +14,13 @@ include config.mk
 # instructions to reflect that.  (We also use this as a place to put
 # optimization flags, but be aware that higher optimization levels can
 # reveal more warnings.)
-ifeq ("$(RELEASE)","")
-	WERROR=-Werror
-	OPT_CFLAG=-O0
-	STRIP=true is not strip
+RELEASE=no
+ifeq ($(RELEASE),no)
+WERROR=-Werror
+OPT_CFLAG=-O0
 else
-	WERROR=-Wno-error
-	OPT_CFLAG=-O2
-	STRIP=strip
+WERROR=-Wno-error
+OPT_CFLAG=-O
 endif
 
 #   Build details, part of the extended version info
@@ -30,8 +29,7 @@ COMMIT_ID := $(shell \
 	(command -v git 2>&1 >/dev/null && git rev-parse --short HEAD) || \
 	echo "")
 
-# Base name of the tarball and/or default installation directory
-RELEASE_NAME=relarn-$(RELARN_VERSION).$(RELARN_PATCHLEVEL)-$(PLATFORM)
+#	optimization.  Keep at -O2 unless debugging
 
 #  	name of program
 PROGRAM	= relarn$(EXT)
@@ -45,7 +43,7 @@ CFLAGS= -std=gnu99 -g -Wall -Wno-comment $(WERROR) $(PLATFORM_CFLAGS)   \
 	$(ASSERT_CFLAGS) $(OPT_CFLAG)
 
 #   defines:
-DEFINES= -DPLATFORM_ID="\"$(SYS)\""	\
+DEFINES=-DINST_ROOT="\"$(INST_ROOT)\"" -DPLATFORM_ID="\"$(SYS)\""	\
 	-DBUILD_DATE="\"$(DATE)\"" -DCOMMIT_ID="\"$(COMMIT_ID)\""			\
 	-DRELARN_VERSION="\"$(RELARN_VERSION)\""							\
 	-DRELARN_PATCHLEVEL="\"$(RELARN_PATCHLEVEL)\""
@@ -99,45 +97,24 @@ LIBFILES=Uhelp Umaps Ufortune Uintro
 all: $(PROGRAM)
 	@echo "commit-id (if present) is '$(COMMIT_ID)'"
 
+over: clean all
+
 $(PROGRAM): $(OBJS1)
 	$(CC) -o $@.tmp $(LDFLAGS) $(OBJS1)  $(LIBS)
 	-rm -f $@
 	mv $@.tmp $@
-	$(STRIP) $@
 
 .c.o:
 	$(CC) -c $(CFLAGS) $(DEFINES) $< -o $@
 
-# Build and install locally
-install:
-	$(MAKE) RELEASE=y _install
 
-ifeq ("$(INST_ROOT)","")
-_install:
-	$(error 'make install' requires INST_ROOT to be set.)
-else
-_install: $(PROGRAM)
+install: $(PROGRAM)
 	(cd ../platform_src/windows_launcher; make SYS=$(SYS) all)
 	../build_helpers/install_relarn.sh "$(INST_ROOT)" $(EXT) $(IS_DIST) \
 		$(SH_EXT) $(IS_WINDOWS)
-endif
 
-# 'make install' but also include dependencies in the installation;
-# the ci script uses this to create a release artifact but does the
-# zipping itself.
 install_dist:
 	$(MAKE) IS_DIST=yes install
-
-
-# Create a release tarball.
-tarball:
-	$(MAKE) clean
-	mkdir $(RELEASE_NAME)
-	$(MAKE) IS_DIST=yes RELEASE=y INST_ROOT="`pwd`/$(RELEASE_NAME)" _install
-	tar cf $(RELEASE_NAME).tar $(RELEASE_NAME)
-	gzip -9 $(RELEASE_NAME).tar
-	echo "Created $(RELEASE_NAME).tar.gz"
-
 
 ifeq ($(IS_MACGUI),yes)
 app:
@@ -152,7 +129,6 @@ endif
 
 clean:
 	-rm -f $(PROGRAM) $(OBJS1) core.[0-9]+ deps.mk ../doc/relarn.6
-	-rm -rf $(RELEASE_NAME) $(RELEASE_NAME).tar.gz
 	-(cd ../platform_src/windows_launcher; make clean)
 	-( [ -d ReLarn.app ] && rm -rf ReLarn.app )
 

@@ -18,18 +18,7 @@ if (uname -s | grep -q '^CYGWIN_NT'); then
     bin=.exe
 fi
 
-# Find the actual installation directory if this script was run via a
-# symlink.  (macOS's 'readlink' doesn't support `-f` so we need to find the
-# actual path the hard way.)
-this_script="${BASH_SOURCE[0]}"
-while [ -L "$this_script" ]; do
-    this_script=$(readlink "$this_script")
-done
-
-RELARN_INSTALL_ROOT=$(dirname "$this_script")/..
-RELARN_INSTALL_ROOT=$(cd -P "$RELARN_INSTALL_ROOT"; pwd)
-
-export RELARN_INSTALL_ROOT
+export RELARN_INSTALL_ROOT=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." ; pwd)
 
 # For macOS, we need to set the dylib load path to find the shared libs.
 if [[ "`uname -s`" = "Darwin" ]]; then

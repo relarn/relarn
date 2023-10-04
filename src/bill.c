@@ -105,7 +105,8 @@ make_mail_command(char dest[], size_t dest_len) {
 
     // First, make a scratch copy of option.
     char buffer[MAX_CMDLINE_LENGTH];
-    zstrncpy(buffer, GameSettings.emailClient, sizeof(buffer));
+    strncpy(buffer, GameSettings.emailClient, sizeof(buffer));
+    buffer[sizeof(buffer) - 1] = 0;
 
     // Find the %s.  If there isn't one, add it (quoted).
     char *here = strstr(buffer, "%s");

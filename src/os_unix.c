@@ -89,7 +89,7 @@ cfg_root() {
     char *env_home = getenv("HOME");
     ENSURE_MSG(env_home && *env_home, "$HOME is unset.");
 
-    zstrncpy(home, env_home, sizeof(home));
+    strncpy(home, env_home, sizeof(home));
     home[sizeof(home) - 1] = 0;
     ENSURE_MSG(strlen(home) < sizeof(home) - 1, "$HOME path is too long.");
 
