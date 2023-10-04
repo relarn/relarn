@@ -258,8 +258,7 @@ init_new_player (enum CHAR_CLASS cc,
     UU.challenge = difficulty;
     UU.monstCount = 80;
 
-    strncpy(UU.name, GameSettings.name, sizeof(UU.name));
-    UU.name[sizeof(UU.name) - 1] = '\0';
+    zstrncpy(UU.name, GameSettings.name, sizeof(UU.name));
 
     UU.level = 1;     /*  player starts at level one  */
     UU.regencounter = 16;

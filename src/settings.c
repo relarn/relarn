@@ -17,8 +17,8 @@ initopts() {
     memset(&GameSettings, 0, sizeof(GameSettings));
 
     // Default name:
-    strncpy(GameSettings.name, get_username(),
-            sizeof(GameSettings.name) - 1);
+    zstrncpy(GameSettings.name, get_username(),
+             sizeof(GameSettings.name));
     GameSettings.nameSet = false;
 
     GameSettings.name[0] = toupper(GameSettings.name[0]);
@@ -108,7 +108,7 @@ gender(const char *line, const char *prefix, enum GENDER *gender,
 static bool
 set_font_settings(const char *font_desc_orig) {
     char font_desc[LINE_MAX];
-    strncpy(font_desc, font_desc_orig, sizeof(font_desc));
+    zstrncpy(font_desc, font_desc_orig, sizeof(font_desc));
 
     // Find the separating comma if present
     int cma = 0;
@@ -129,7 +129,7 @@ set_font_settings(const char *font_desc_orig) {
     }// if
 
     // Copy over the path to the font file
-    strncpy(GameSettings.fontPath, path, sizeof(GameSettings.fontPath));
+    zstrncpy(GameSettings.fontPath, path, sizeof(GameSettings.fontPath));
     GameSettings.fontPath[sizeof(GameSettings.fontPath) - 1] = 0;
 
     return true;
@@ -169,7 +169,7 @@ set_one_color(const char *desc, struct Color *dest) {
 static bool
 set_colors(const char *line) {
     char colors[LINE_MAX];
-    strncpy(colors, line, sizeof(colors));
+    zstrncpy(colors, line, sizeof(colors));
 
     struct Color *clrs[] = {
         &GameSettings.black,
@@ -247,7 +247,7 @@ readopts (const char *opts_file) {
         }// if
 
         if (opt(line, "name:", &arg)) {
-            strncpy(GameSettings.name, arg, sizeof(GameSettings.name));
+            zstrncpy(GameSettings.name, arg, sizeof(GameSettings.name));
             GameSettings.nameSet = true;
             continue;
         }
@@ -264,16 +264,16 @@ readopts (const char *opts_file) {
 
         if (opt(line, "email-client:", &arg)) {
             if(!gui_client_set) {
-                strncpy(GameSettings.emailClient, arg,
-                        sizeof(GameSettings.emailClient) - 1);
+                zstrncpy(GameSettings.emailClient, arg,
+                        sizeof(GameSettings.emailClient));
             }
             continue;
         }// if
 
         if (opt(line, "gui-email-client:", &arg)) {
             if(!is_tty()) {
-                strncpy(GameSettings.emailClient, arg,
-                        sizeof(GameSettings.emailClient) - 1);
+                zstrncpy(GameSettings.emailClient, arg,
+                        sizeof(GameSettings.emailClient));
                 gui_client_set = true;
             }
             continue;

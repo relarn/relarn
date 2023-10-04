@@ -3,6 +3,32 @@
 Note that spoilery changes are listed in a following section if you
 wish to avoid them.
 
+## Changes in 2.2.2
+
+Various bug fixes:
+* Items with negative enchantment had a really high resale value.
+* When selling gems at the bank, the price shown was the store price,
+  not the bank price.
+* The `-s` and `-i` had their meanings swapped.
+(Thanks to Github user Meklon2007 for reporting these.)
+
+Other bug fixes:
+* Monsters were not setting off traps.
+* The launch script will now work when launched via a symlink.
+
+Simplified running relarn in a debugger by making the executable use
+`../data` and `..` as the `lib` and `var` paths when run directly
+(i.e. without the launch script) as you would from in the `src`
+directory.  It should also no longer be necessary to edit any
+make files for for ordinary out-of-the-box builds.
+
+`-s` and `-i` now show an empty scoreboard if the score file is
+missing or empty rather than just exiting.  They also show a message
+if the score file appears to be corrupted.
+
+Other tidying.
+
+
 ## Changes in 2.2.0
 
 Now supports native Microsoft Windows as a platform.  All Hail the

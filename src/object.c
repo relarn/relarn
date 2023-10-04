@@ -60,7 +60,7 @@ longobjname (struct Object obj) {
     {
         sprintf(desc, "%s %+d", objname(obj), (int)obj.iarg);
     } else {
-        strncpy(desc, objname(obj), sizeof(desc));
+        zstrncpy(desc, objname(obj), sizeof(desc));
     }/* if .. else*/
 
     return desc;
@@ -544,7 +544,7 @@ storesellvalue(struct Object obj) {
     if (iswieldable(obj)) {
         int izarg;
 
-        for (izarg = obj.iarg; izarg; izarg--) {
+        for (izarg = obj.iarg; izarg > 0; izarg--) {
             if (value >= 500000L) break;
             value = 14 * (67+value)/10;
         }/* for */
