@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2023; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 /* This game is bad for you. It is evil. It will rot your brain. */
@@ -65,11 +65,11 @@ parse_args(int argc, char *argv[]) {
 
         case 's':
             only_show_scores = true;
+            only_show_winners = true;
             break;
 
         case 'i':
             only_show_scores = true;
-            only_show_winners = true;
             break;
 
         case 'w':
@@ -85,7 +85,7 @@ parse_args(int argc, char *argv[]) {
             break;
 
         case 'f':
-            strncpy(GameSettings.fontPath, optarg,
+            zstrncpy(GameSettings.fontPath, optarg,
                     sizeof(GameSettings.fontPath));
             break;
 

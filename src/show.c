@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2023; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "show.h"
@@ -18,9 +18,9 @@
 const char *
 inv_line(int index, enum PRICEMODE pricemode) {
     struct Object obj = Invent[index];
-    static char result[300];
+    static char result[400];
 
-    strncpy(result, knownobjname(obj), sizeof(result));
+    zstrncpy(result, knownobjname(obj), sizeof(result));
 
     if (iswieldable(obj) && (UU.wizardMode || obj.iarg != 0)) {
         char enbuf[30];
@@ -41,7 +41,7 @@ inv_line(int index, enum PRICEMODE pricemode) {
         int price = pricemode == PRM_STORE ?
             storesellvalue(obj) : banksellvalue(obj);
 
-        strncpy(buffer, result, sizeof(buffer));
+        zstrncpy(buffer, result, sizeof(buffer));
 
         snprintf(result, sizeof(result), "%-40s (%d GP)", buffer, price);
     }/* if */

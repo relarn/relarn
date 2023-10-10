@@ -17,12 +17,14 @@ and code snippets were stolen from it.
 Line-of-sight code was written by Greg McIntyre via "libfov", most of
 which is included here.
 
-ReLarn was written by Chris Reuter between 2010 and 2020.  It was
-derived from Ularn version "1.15ish" dated "16 November 2001" with
-some elements taken from iLarn.
+ReLarn was written by me, Chris Reuter, between 2010 and 2020, with
+sporadic updates afterward.  It was derived from Ularn version
+"1.15ish" dated "16 November 2001" with some elements taken from
+iLarn.
+
+The default font used by the SDL builds of ReLarn (Inconsolata-Medium)
+was created by Raph Levien and various collaborators and is included
+here in accordance with the Open Font License.
 
 These are all of the contributors that I know of; there are likely
 many others.
-
-
-

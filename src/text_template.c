@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2023; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "text_template.h"
@@ -73,7 +73,7 @@ append_expansion(struct StringBuilder *result, const struct Player *pl,
     }
     else if (streq("player_email", keyword)) {
         char email[PLAYERNAME_MAX];
-        strncpy(email, pl->name, sizeof(email));
+        zstrncpy(email, pl->name, sizeof(email));
         for (size_t n = 0; email[n]; n++) {
             email[n] = tolower(email[n]);
             if (!isalnum(email[n])) { email[n] = '.'; }
@@ -104,7 +104,7 @@ append_expansion(struct StringBuilder *result, const struct Player *pl,
         time(&tm);
 
         char buffer[40];
-        strncpy(buffer, ctime(&tm), sizeof(buffer));
+        zstrncpy(buffer, ctime(&tm), sizeof(buffer));
         buffer[ strlen(buffer) - 1 ] = 0;   // Remove trailing newline
         
         sb_append(result, buffer);

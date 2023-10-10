@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2023; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // This module implements the OS-specific code.  In theory, a port to
@@ -39,6 +39,7 @@ const char *levels_path(void);
 const char *intro_path(void);
 const char *help_path(void);
 const char *icon_path(void);
+const char *font_path(void);
 const char *scoreboard_path(void);
 
 

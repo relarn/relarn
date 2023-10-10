@@ -1,3 +1,5 @@
+// This file is part of ReLarn; Copyright (C) 1986 - 2023; GPLv2; NO WARRANTY!
+// See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "savegame.h"
 
@@ -108,7 +110,7 @@ sum(unsigned char *data, size_t data_len) {
     for (size_t nb = 0; nb < data_len; nb++) {
         int c = *data++;
 
-        if (sum & 01) {
+        if (sum & 0x1) {
             sum = (sum >> 1) + 0x8000;
         } else {
             sum >>= 1;

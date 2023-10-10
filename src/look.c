@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2023; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -985,7 +985,7 @@ ohome() {
         "        It is rumored that only deep in the depths of the\n"
         "        caves can this potion be found.";
 
-    char buffer[500];
+    char buffer[1000];
     struct TextBuffer *msg;
     int cause = -1; /* -1 means not dead here. */
 

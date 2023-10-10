@@ -1,8 +1,11 @@
+// This file is part of ReLarn; Copyright (C) 1986 - 2023; GPLv2; NO WARRANTY!
+// See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "os_windows.h"
 #include "constants.h"
 
 #include "internal_assert.h"
+#include "util.h"
 
 #include <stdlib.h>
 
@@ -99,7 +102,7 @@ cfg_root() {
 
     char *env_home = getenv(OVERRIDE_HOME);
     if (env_home) {
-        strncpy(root, env_home, sizeof(root));
+        zstrncpy(root, env_home, sizeof(root));
         root[sizeof(root) - 1] = 0;
         return root;
     }

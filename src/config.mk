@@ -2,12 +2,6 @@
 # Build configuration file.  In theory, this is the only file you need
 # to edit.
 
-# Absolute path to the installation directory. This also gets
-# hardcoded in the executable but may be overridden by the launch
-# script.
-INST_ROOT = $(HOME)/apps/relarn-$(RELARN_VERSION).$(RELARN_PATCHLEVEL)
-#INST_ROOT = /usr/local/games/relarn-$(RELARN_VERSION).$(RELARN_PATCHLEVEL)
-
 # Comment out this line to enable assertions.  You only want to do
 # this if you're developing or debugging.
 #ASSERT_CFLAGS = -DDISABLE_ASSERT=1
@@ -26,17 +20,27 @@ INST_ROOT = $(HOME)/apps/relarn-$(RELARN_VERSION).$(RELARN_PATCHLEVEL)
 # line.
 
 
+# If MINGW_PREFIX is set, it means we're cross-building with MinGW and
+# that this is the prefix of the various tools' names.  This may or
+# may not work for you.
+ifneq ("$(MINGW_PREFIX)", "")
+	SYS=mingw-cross
+endif
+
+
+
 # Full platform ID (i.e. SYS but with -pdc appended if we're building
 # against PDCurses+SDL2.)
 ifeq ("$(PDCURSES)","")
 	PLATFORM=$(SYS)
 else
 	PLATFORM=$(SYS)-pdc
+	INCLUDES += -I$(PDCURSES)
+#	SDL_PREFIX= ...		# sdl2-config --prefix argument, if needed.
 endif
 
 
 EXT=.bin		# Executable suffix; optional on Unix
-SH_EXT=			# Shell script filename suffix
 IS_WINDOWS=		# Empty unless target is stock (non-Cygwin) Windows
 IS_MACGUI=		# Empty unless target is a macOS GUI app
 
@@ -50,7 +54,6 @@ else ifeq ($(PLATFORM),cygwin_nt-x86)		# Cygwin as target
 	LD=gcc
 	PLATFORM_CFLAGS=
 	EXT=.exe
-	SH_EXT=.sh
 	LIBS=	-lcurses -lm
 else ifeq ($(PLATFORM),linux-arm)			# Raspbian
 	CC=gcc
@@ -58,15 +61,15 @@ else ifeq ($(PLATFORM),linux-arm)			# Raspbian
 	PLATFORM_CFLAGS=
 	LIBS=-lcurses -lm
 else ifeq ($(PLATFORM),darwin-x86)			# macOS
-	CC=gcc
-	LD=gcc
-	PLATFORM_CFLAGS=-fno-spell-checking
+	CC=clang
+	LD=clang
+	PLATFORM_CFLAGS=
 	LIBS=-lcurses -lm
 else ifeq ($(PLATFORM),darwin-x86-pdc)		# macOS + pdcurses
-	CC=gcc
-	PLATFORM_CFLAGS := -fno-spell-checking -I$(PDCURSES) -DUSE_PDCURSES=1 \
+	CC=clang
+	PLATFORM_CFLAGS := -I$(PDCURSES) -DUSE_PDCURSES=1 \
 		`sdl2-config --cflags` -DPDC_WIDE
-	LD=gcc
+	LD=clang
 	LIBS=$(PDCURSES)/sdl2/pdcurses.a -lm `sdl2-config --libs` -lSDL2_ttf
 	IS_MACGUI=yes
 else ifeq ($(PLATFORM),linux-x86-pdc)		# E.g. Ubuntu + PC + pdcurses
@@ -77,25 +80,43 @@ else ifeq ($(PLATFORM),linux-x86-pdc)		# E.g. Ubuntu + PC + pdcurses
 	LIBS= -lm $(PDCURSES)/sdl2/pdcurses.a `sdl2-config --libs` -lSDL2_ttf
 else ifeq ($(PLATFORM),msys_nt-x86-pdc)		# Windows with MinGW via msys2
 	CC=gcc
-	LD=gcc
+	LD=$(CC)
+	WINDRES=windres
+
 	PLATFORM_CFLAGS=-Wno-format-truncation -I$(PDCURSES) -DUSE_PDCURSES=1 \
 		`sdl2-config --cflags` -DPDC_WIDE=1 -DWIN32_LEAN_AND_MEAN=1 -mwindows
+
 	PLATFORM_LDFLAGS=-mwindows
-	EXT=.exe
-	SH_EXT=.sh
 	LIBS= $(PDCURSES)/sdl2/pdcurses.a `sdl2-config --static-libs` -lSDL2_ttf \
 		-lsecur32
+
+	EXT=.exe
+
 	IS_WINDOWS=yes
-else ifeq ($(PLATFORM),cross-mswin)			# Windows cross compiler (doesn't work)
-	CC=x86_64-w64-mingw32-gcc
+else ifeq ($(PLATFORM),mingw-cross-pdc)
+	CC=$(MINGW_PREFIX)-gcc
 	LD=$(CC)
+	WINDRES=$(MINGW_PREFIX)-windres
+	STRIP=$(MINGW_PREFIX)-strip
+
 	PLATFORM_CFLAGS=-Wno-format-truncation -I$(PDCURSES) -DUSE_PDCURSES=1 \
-		`sdl2-config --cflags` -DPDC_WIDE=1 -DWIN32_LEAN_AND_MEAN=1
-	LIBS= -lm $(PDCURSES)/sdl2/pdcurses.a `sdl2-config --libs` -lSDL2_ttf
+		$(shell sdl2-config $(SDL_PREFIX) --cflags) -DPDC_WIDE=1 -DWIN32_LEAN_AND_MEAN=1 -mwindows
+
+	PLATFORM_LDFLAGS=-mwindows
+	LIBS= $(PDCURSES)/sdl2/pdcurses.a $(shell sdl2-config $(SDL_PREFIX) --static-libs) -lSDL2_ttf \
+		-lsecur32
+
+	EXT=.exe
 	IS_WINDOWS=yes
+	IS_CROSSBUILD=yes
+
+	PLATFORM_FILENAME=windows-pdc
+
 else ifeq ($(PLATFORM),msys_nt-x86)			# Windows console (unsupported)
 # We currently don't support TTY-mode on Windows
 $(error PDCURSES must be set when building for Windows $(PLATFORM))
 else
 $(error No settings for $(SYS) ($(PLATFORM)))
 endif
+
+PLATFORM_FILENAME=$(PLATFORM)

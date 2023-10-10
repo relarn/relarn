@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2023; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "util.h"
@@ -132,3 +132,12 @@ adjpoint(int8_t x, int8_t y, DIRECTION dir, int8_t *outx, int8_t *outy) {
     *outy = y + offy[dir];
 }// adjpoint
 
+
+// Wraps strncpy but ensures that dest is always null-terminated,
+// overwriting the last copied character if necessary.
+char* zstrncpy(char *dest, const char *src, size_t max) {
+    ASSERT(max > 0);
+    char* result = strncpy(dest, src, max);
+    dest[max - 1] = 0;
+    return result;
+}// zstrncpy

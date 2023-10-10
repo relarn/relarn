@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2023; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // Os-specific functionality.  All os-dependent stuff is buried here.
@@ -23,11 +23,6 @@
 #include <errno.h>
 #include <time.h>
 #include <string.h>
-
-// This needs to be defined on the compiler command line
-#ifndef INST_ROOT
-#   error "INST_ROOT is undefined."
-#endif
 
 
 #define LIB_SUBPATH "/share/relarn/lib/"
@@ -57,6 +52,12 @@
 static bool exeIsWritable = false;
 
 
+struct {
+    char inst_root[MAXPATHLEN];
+    char lib[MAXPATHLEN];
+    char var[MAXPATHLEN];
+} PATHS;
+
 static const char *samplerc_path(void);
 
 
@@ -77,12 +78,12 @@ copy_file(const char *src, const char *dest) {
         if (fputc(c, destfh) == EOF) {
             status = false;
             break;
-        }// if 
-    }// for 
+        }// if
+    }// for
 
     fclose(srcfh);
     fclose(destfh);
-        
+
     return status;
 }// copy_file
 
@@ -121,13 +122,48 @@ cfgdir() {
         say("Error installing sample '%s'.\n", BASE_CFG);
         say("You can find it in '%s' if you need it.\n", samplerc_path());
     }// if
-    
+
     return cfgpath;
 }// cfgdir
 
 
+static void
+setup_paths() {
+    bool is_uninstalled = false;
+
+    // Set the base installation root.
+    const char *env_root = getenv(VAR_PATH);
+    if (!env_root || !*env_root) {
+        // If env_root is unset or empty, we assume this is being run
+        // out of the build directory, probably for debugging
+        // purposes.
+        fprintf(stderr, "'%s' unset; assuming uninstalled.\n", VAR_PATH);
+        snprintf(PATHS.inst_root, sizeof(PATHS.inst_root), "..");
+        is_uninstalled = true;
+    }
+    else {
+        snprintf(PATHS.inst_root, sizeof(PATHS.inst_root), "%s", env_root);
+    }// if
+
+    // Yeah, we drop the high-score file in the current directory if
+    // there isn't an install dir.
+    memset(PATHS.var, 0, sizeof(PATHS.var));
+    zstrncpy(PATHS.var,
+            is_uninstalled ? "." : VAR_SUBPATH,
+            sizeof(PATHS.var));
+
+    memset(PATHS.lib, 0, sizeof(PATHS.lib));
+    zstrncpy(PATHS.lib,
+            is_uninstalled ? "data" : LIB_SUBPATH,
+            sizeof(PATHS.lib));
+}
+
+
 void
 init_os(const char *binpath) {
+
+    // Init PATHS to hold the relevant
+    setup_paths();
 
     // Create the ~/.relarn directory if not present
     cfgdir();
@@ -150,8 +186,7 @@ get_username() {
         env_name = "Mysterio";
     }
 
-    strncpy(name, env_name, sizeof(name) - 1);
-    name[sizeof(name) - 1] = 0;
+    zstrncpy(name, env_name, sizeof(name));
 
     // Filter out any tricky characters (esp. tab)
     for (char* c = name; *c; c++) {
@@ -170,21 +205,6 @@ bool
 canDebug() {
     return exeIsWritable || os_win_debug();
 }// canDebug
-
-
-// Determine the installation root; this is either from the
-// environment or falls back onto a default.
-static const char *
-inst_root() {
-    static char *root;
-
-    if (!root) {
-        const char *env_root = getenv(VAR_PATH);
-        root = (env_root && *env_root) ? xstrdup(env_root) : INST_ROOT;
-    }// if
-
-    return root;
-}// inst_root
 
 
 
@@ -211,53 +231,60 @@ make_cfgdir_path(char *dest, size_t dest_size, const char *file) {
 
 
 
+
 const char *
 fortunes_path() {
     static char path[MAXPATHLEN];
-    return make_path(path, sizeof(path), inst_root(), LIB_SUBPATH, FORTSNAME);
+    return make_path(path, sizeof(path), PATHS.inst_root, PATHS.lib, FORTSNAME);
 }// fortunes_path
 
 const char *
 junkmail_path() {
     static char path[MAXPATHLEN];
-    return make_path(path, sizeof(path), inst_root(), LIB_SUBPATH, MAILFILE);
+    return make_path(path, sizeof(path), PATHS.inst_root, PATHS.lib, MAILFILE);
 }// junkmail_path
 
 const char *
 levels_path() {
     static char path[MAXPATHLEN];
-    return make_path(path, sizeof(path), inst_root(), LIB_SUBPATH, LEVELSNAME);
+    return make_path(path, sizeof(path), PATHS.inst_root, PATHS.lib, LEVELSNAME);
 }// levels_path
 
 const char *
 intro_path() {
     static char path[MAXPATHLEN];
-    return make_path(path, sizeof(path), inst_root(), LIB_SUBPATH, INTRONAME);
+    return make_path(path, sizeof(path), PATHS.inst_root, PATHS.lib, INTRONAME);
 }// intro_path
 
 const char *
 help_path() {
     static char path[MAXPATHLEN];
-    return make_path(path, sizeof(path), inst_root(), LIB_SUBPATH, HELPNAME);
+    return make_path(path, sizeof(path), PATHS.inst_root, PATHS.lib, HELPNAME);
 }// help_path
 
 const char *
 icon_path() {
     static char path[MAXPATHLEN];
-    return make_path(path, sizeof(path), inst_root(), LIB_SUBPATH, ICONNAME);
-}// help_path
+    return make_path(path, sizeof(path), PATHS.inst_root, PATHS.lib, ICONNAME);
+}
+
+const char *
+font_path() {
+    static char path[MAXPATHLEN];
+    return make_path(path, sizeof(path), PATHS.inst_root, PATHS.lib,
+                     "fonts/Inconsolata-Medium.ttf");
+}
 
 static const char *
 samplerc_path() {
     static char path[MAXPATHLEN];
-    return make_path(path, sizeof(path), inst_root(), LIB_SUBPATH, SAMPLERC);
-}// help_path
-
+    return make_path(path, sizeof(path), PATHS.inst_root, PATHS.lib, SAMPLERC);
+}
 
 const char *
 scoreboard_path() {
     static char path[MAXPATHLEN];
-    return make_path(path, sizeof(path), inst_root(), VAR_SUBPATH, SCORENAME);
+    return make_path(path, sizeof(path), PATHS.inst_root, PATHS.var, SCORENAME);
 }// scoreboard_path
 
 
@@ -278,7 +305,7 @@ make_savedir_if_absent() {
     check_done = true;
 
     // We assume the main .relarn dir has already been created.
-    char path[MAXPATHLEN];
+    char path[MAXPATHLEN + 20]; // Padding prevents a gcc warning
     snprintf(path, sizeof(path), "%s/%s", cfgdir(), BASE_SAVEDIR);
 
     // If the savedir already exists, we're done.
@@ -310,7 +337,7 @@ static const char *
 backup_savefile_path() {
     static char newname[MAXPATHLEN+3];
 
-    strncpy(newname, savefile_path(), sizeof(newname));
+    zstrncpy(newname, savefile_path(), sizeof(newname));
 
     size_t len = strlen(newname);
     newname[len - 4] = '\0';    // Truncate the trailing extension
@@ -349,7 +376,7 @@ bool
 rotate_save() {
     const char *sp = savefile_path();
     const char *bp = backup_savefile_path();
-    
+
     // If no save file is present, there's nothing to do.
     if (access(sp, F_OK) != 0) { return true; }
 
@@ -371,7 +398,7 @@ save_game() {
         notify("Savegame buffer is empty; not saving!");
         return SS_FAILED;
     }
-    
+
     bool moveSuccess = rotate_save();
 
     FILE *fh = fopen(sp, "wb");
@@ -404,7 +431,7 @@ load_savefile(const char *sp) {
     if (status == SS_SUCCESS) {
         restore_global_game_state();
     }
-    
+
     if (wrongVersion) {
         return SS_INCOMPATIBLE_SAVE;
     }
@@ -434,7 +461,7 @@ restore_game() {
     if (ss_success(status)) {
         post_restore_processing();
     }
-    
+
     return status;
 }// restore_game
 

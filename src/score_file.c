@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2023; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "score_file.h"
@@ -204,9 +204,9 @@ newscore(long score, bool won, int level, const char *ending,
          const struct Player *uu) {
     struct ScoreBoardEntry sb;
 
-    strncpy(sb.uid, get_user_id(), OS_UID_STR_MAX);
-    strncpy(sb.who, uu->name, sizeof(sb.who));
-    strncpy(sb.cclass, ccname(uu->cclass), sizeof(sb.cclass));
+    zstrncpy(sb.uid, get_user_id(), OS_UID_STR_MAX);
+    zstrncpy(sb.who, uu->name, sizeof(sb.who));
+    zstrncpy(sb.cclass, ccname(uu->cclass), sizeof(sb.cclass));
     sb.gender = uu->gender;
     sb.won = won;
     sb.score = score;
@@ -214,17 +214,10 @@ newscore(long score, bool won, int level, const char *ending,
     sb.challenge = uu->challenge;
     sb.level = level;
     sb.exp_level = uu->level;
-    strncpy(sb.ending, ending, sizeof(sb.ending));
-
-    // strncpy doesn't null-terminate if the source is longer than the
-    // maximum.
-    sb.who[sizeof(sb.who) - 1] = 0;
-    sb.cclass[sizeof(sb.cclass) - 1] = 0;
-    sb.ending[sizeof(sb.ending) - 1] = 0;
+    zstrncpy(sb.ending, ending, sizeof(sb.ending));
 
     // Sanitize the strings
     sanitize(&sb);
-
 
     FILE *fh = fopen(scoreboard_path(), "ab");
     if (!fh) { return false; }
@@ -267,26 +260,24 @@ get_taxes_owed() {
 
 void
 showscores(bool all) {
-    char buffer[200];
-
+    char buffer[400];
 
     struct TextBuffer *dest = tb_malloc(INF_BUFFER, SCREEN_W);
     
     size_t len = 0;
     struct ScoreBoardEntry *items = load_scorefile(&len);
 
-    if (!items) {
-        tb_append(dest, "\n\n\n");
-        tb_append(dest,
-                  len == 0 ? "No scores yet." : "Score file is corrupt!");
-        return;
-    }// if
-
     // Heading
     snprintf(buffer, sizeof(buffer),
              "%-9s %-5s %-9s %-3s %-5s\n",
              "Score", "", "Challenge", "Floor", "Level");
     tb_append(dest, buffer);
+
+    if (!items && len > 0) {
+        tb_append(dest, "\n");
+        tb_append(dest, "    *** Error reading score file ***");
+        len = 0;
+    }
 
     size_t n;
     for (n = 0; n < len; n++) {

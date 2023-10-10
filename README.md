@@ -31,19 +31,6 @@ You should probably also at least skim [the manual](doc/relarn.pod).
 If you want to build it yourself, directions are [here](doc/BUILD.md).
 
 
-## Installing
-
-ReLarn typically follows the standard Unix file layout (`bin/`,
-`lib/`, `share/`, etc.) so you could just `make install` or untar into
-(e.g.) `/usr/local/` on your *nix system.  I generally don't recommend
-this because saved games are not compatible across significant version
-changes so keeping the old version around gives you a shot at
-finishing it.
-
-My preferred scheme is to put in /usr/local/apps/relarn-<version>/ and
-then symlink the `relarn` file to somewhere in my path.
-
-
 ## Contributing
 
 Pull requests are welcome.  In particular, I'm looking for bug fixes,

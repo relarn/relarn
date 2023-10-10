@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2023; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 
@@ -44,7 +44,7 @@ pl_add(struct PickList *pl, int id, char letter, const char *desc) {
     ndx = pl->num_elems;
     pl->items[ndx].id = id;
     pl->items[ndx].letter = letter;
-    strncpy (pl->items[ndx].description, desc, DESC_MAX);
+    zstrncpy (pl->items[ndx].description, desc, DESC_MAX);
 
     ++pl->num_elems;
 }/* pl_add*/

@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2023; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 // Helper functions and definitions to build against PDCurses+SDL2
@@ -38,34 +38,37 @@ set_pdcurses_font() {
     os_unsetenv("PDC_FONT");
     os_unsetenv("PDC_FONT_SIZE");
 
-    // Set the font
-    if (GameSettings.fontPath[0]) {
-        char *fp = GameSettings.fontPath;
+    // Get the font path, either from the user's preference or the
+    // default in the data dir.  (We provide our own default because
+    // Wine doesn't provide the default font PDCurses is expecting,
+    // and anyway, this makes for a more consistent look.)
+    const char *fp = GameSettings.fontPath;
+    if (!*fp) {
+        fp = font_path();
+    }
 
-        // Expand leading '+' to the config directory.
-        char path[MAXPATHLEN];
-        if (GameSettings.fontPath[0] == '+') {
-            snprintf(path, sizeof(path), "%s/%s",
-                     cfgdir_path(),
-                     GameSettings.fontPath + 1);
-            fp = path;
-        }// if
-
-        // Confirm we can read the file.  We do this here instead of
-        // letting PDCurses try and fail because the error message
-        // gets lost on Windows.
-        if (!freadable(fp)) {
-            notify("Unable to open font file '%s'.\n", fp);
-            exit(1);
-        }// if 
-        
-        os_setenv("PDC_FONT", fp, 1);
-
-        // Set the font size
-        char sizebuf[80];
-        snprintf(sizebuf, sizeof(sizebuf), "%d", GameSettings.fontSize);
-        os_setenv("PDC_FONT_SIZE", sizebuf, 1);
+    // Expand leading '+' to the config directory.
+    char path[MAXPATHLEN];
+    if (fp[0] == '+') {
+        snprintf(path, sizeof(path), "%s/%s",
+                 cfgdir_path(), fp + 1);
+        fp = path;
     }// if
+
+    // Confirm we can read the file.  We do this here instead of
+    // letting PDCurses try and fail because the error message
+    // gets lost on Windows.
+    if (!freadable(fp)) {
+        notify("Unable to open font file '%s'.\n", fp);
+        exit(1);
+    }// if
+
+    os_setenv("PDC_FONT", fp, 1);
+
+    // Set the font size
+    char sizebuf[80];
+    snprintf(sizebuf, sizeof(sizebuf), "%d", GameSettings.fontSize);
+    os_setenv("PDC_FONT_SIZE", sizebuf, 1);
 }// set_pdcurses_font
 
 

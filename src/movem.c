@@ -1,4 +1,4 @@
-// This file is part of ReLarn; Copyright (C) 1986 - 2020; GPLv2; NO WARRANTY!
+// This file is part of ReLarn; Copyright (C) 1986 - 2023; GPLv2; NO WARRANTY!
 // See Copyright.txt, LICENSE.txt and AUTHORS.txt for terms.
 
 #include "internal_assert.h"
@@ -536,7 +536,7 @@ checkpointy(int xdest, int ydest) {
     const char *who, *what;
 
     if (!ismon(mon)) return;
-    if (dob.type != OTRAPARROW || dob.type != ODARTRAP) return;
+    if (dob.type != OTRAPARROW && dob.type != ODARTRAP) return;
 
     if (dob.type == OTRAPARROW) {
         who = "An arrow";
@@ -546,14 +546,15 @@ checkpointy(int xdest, int ydest) {
         mon.hitp -= rnd(6);
     }/* if .. else*/
 
+    struct Monster new_mon = NULL_MON;
     if (mon.hitp <= 0) {
-        mon = NULL_MON;
-        what = "%s hits the %s.\n";
-    } else {
         what = "%s hits and kills the %s.\n";
+    } else {
+        new_mon = mon;
+        what = "%s hits the %s.\n";
     }/* if .. else*/
 
-    at(xdest, ydest)->mon = mon;
+    at(xdest, ydest)->mon = new_mon;
 
     /* Print the message. */
     if (!UU.blindCount) {
